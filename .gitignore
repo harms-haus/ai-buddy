@@ -1,0 +1,21 @@
+node_modules/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+.mastra/
+data/
+models/
+*.onnx
+*.bin
+# !voices*.bin  # downloaded by download_model.py, not tracked
+*.wav
+!tests/fixtures/*.wav
+.DS_Store
+venv/
+.venv/
+research/
+.dev-logs/
+.dev-pids
