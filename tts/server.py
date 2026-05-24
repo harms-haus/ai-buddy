@@ -187,7 +187,7 @@ async def main():
         ))
     finally:
         if zeroconf:
-            await zeroconf.unregister_server()
+            await zeroconf._aiozc.async_close()
 
 
 if __name__ == "__main__":

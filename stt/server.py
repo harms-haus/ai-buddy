@@ -207,7 +207,7 @@ async def main():
         await server.run(partial(SttEventHandler, info_event, model, gpu_sem))
     finally:
         if zeroconf:
-            await zeroconf.unregister_server()
+            await zeroconf._aiozc.async_close()
 
 
 if __name__ == "__main__":
