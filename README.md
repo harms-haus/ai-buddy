@@ -1,162 +1,172 @@
 # Kids AI Voice Agent
 
-A voice AI agent for two young children (Maxwell, 4.5yo autistic and Zoe, 6yo) that will eventually integrate with Home Assistant via a Satellite1 hardware device.
+A voice assistant for two young children — **Maxwell** (4.5, autistic) and **Zoe** (6) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device.
 
-## Status: Vertical Slice (MVP)
+Three services work together to form a complete voice pipeline:
 
-This is the initial build — 3 independent HTTP services testable separately:
-
-| Service | Tech | Port | Description |
-|---------|------|------|-------------|
-| **Agent** | Mastra (Node.js) | 4111 | AI agent with conversation memory |
-| **TTS** | Kokoro-ONNX (Python) | 5001 | Text-to-speech with GPU acceleration (54 voices) |
-| **STT** | faster-whisper (Python) | 5002 | Speech-to-text with GPU acceleration |
+| Service | Tech | Port | Protocol |
+|---------|------|------|----------|
+| **Agent** | Mastra (Node.js) | 4111 | HTTP — OpenAI-compatible API |
+| **TTS** | Kokoro-ONNX (Python) | 10201 | Wyoming TCP |
+| **STT** | faster-whisper (Python) | 10200 | Wyoming TCP |
 
 ## Architecture
 
 ```
-[Text Input]
-    -> Mastra Agent (port 4111) -> [Text Response]
-    -> Kokoro TTS (port 5001) -> [Audio WAV]
-    -> faster-whisper STT (port 5002) -> [Transcription]
+Satellite1 (wake word)
+  → HA Voice Pipeline
+    → STT (Wyoming :10200) — faster-whisper on GPU
+    → Agent (:4111) — Mastra via Extended OpenAI Conversation
+    → TTS (Wyoming :10201) — Kokoro on GPU
+  → Satellite1 speaker
 ```
 
-## Prerequisites
-
-- **Node.js** 22+ (for Mastra agent)
-- **Python** 3.10+ (for STT/TTS services)
-- **NVIDIA GPU** with CUDA 12 + cuDNN 9 (optional — CPU fallback available)
-- **OpenAI-compatible LLM API** key and endpoint
-- `pip install requests` (for running test scripts)
+The agent exposes an OpenAI Chat Completions–compatible API (`/v1/chat/completions`, `/v1/models`) so Home Assistant's **Extended OpenAI Conversation** integration can call it directly. STT and TTS register as Wyoming devices and are discovered by Home Assistant via Zeroconf/mDNS.
 
 ## Quick Start
 
-### 1. Agent Server
+### Prerequisites
+
+- **Node.js** 22+
+- **Python** 3.10+
+- **NVIDIA GPU** with CUDA 12 + cuDNN 9 (optional — CPU fallback available)
+- **OpenAI-compatible LLM** API key and endpoint
+
+### Install
 
 ```bash
+# Agent
 cd agent
 cp .env.example .env
-# Edit .env: Set OPENAI_API_KEY and OPENAI_BASE_URL to your provider
+# Edit .env — set OPENAI_API_KEY and OPENAI_BASE_URL
 npm install
-npm run dev    # Starts Mastra Studio at http://localhost:4111
-```
 
-### 2. TTS Service (Kokoro)
-
-```bash
-cd tts
-python -m venv venv
-source venv/bin/activate
+# TTS
+cd ../tts
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python download_model.py  # Downloads ~324MB ONNX model + voices
-python server.py           # Starts on port 5001
-```
+python download_model.py        # ~324MB ONNX model + voices
 
-Test: `curl "http://localhost:5001/tts?text=Hello+world&voice=af_heart" --output test.wav`
-
-### 3. STT Service (faster-whisper)
-
-```bash
-cd stt
-python -m venv venv
-source venv/bin/activate
+# STT
+cd ../stt
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-python download_model.py  # Downloads ~1.5GB Whisper model
-python server.py           # Starts on port 5002
+python download_model.py        # ~1.5GB Whisper model
 ```
 
-Test: `curl -X POST http://localhost:5002/stt -F "file=@audio.wav"`
-
-### 4. Run Sanity Tests
+### Run
 
 ```bash
-# Start all 3 services in separate terminals, then:
-./tests/test_agent.sh       # Test agent generate + stream
-python tests/test_tts.py    # Test TTS synthesis + WAV output
-python tests/test_stt.py    # Test STT transcription
-python tests/test_integration.py  # Full pipeline: text->agent->tts->stt->text
+./dev.sh          # starts all 3 services with color-coded logs
+./dev.sh --stop   # stop all services
 ```
 
-## Environment Variables
+`dev.sh` builds and starts the agent, TTS, and STT, then waits for each port to become ready. Press **Ctrl+C** to stop everything.
 
-### Agent (agent/.env)
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| OPENAI_API_KEY | Yes | — | API key for LLM provider |
-| OPENAI_BASE_URL | Yes | — | Base URL for OpenAI-compatible API |
-| PORT | | 4111 | Server port |
+## Configuration
 
-### TTS (tts/.env)
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| TTS_PORT | | 5001 | Server port |
-| KOKORO_VOICE | | af_heart | Default voice (54 available) |
-| KOKORO_SPEED | | 1.0 | Speech speed (0.5-2.0) |
+### Agent (`agent/.env`)
 
-### STT (stt/.env)
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| STT_PORT | | 5002 | Server port |
-| WHISPER_MODEL | | medium.en | Whisper model name |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | — | API key for your LLM provider |
+| `OPENAI_BASE_URL` | — | Base URL for OpenAI-compatible endpoint |
+| `MODEL_NAME` | `openai/gpt-4o` | Model identifier |
+| `MASTRA_PORT` | `4111` | HTTP server port |
+
+### TTS (`tts/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TTS_PORT` | `10201` | Wyoming TCP port |
+| `TTS_HOST` | `0.0.0.0` | Listen address |
+| `KOKORO_VOICE` | `af_heart` | Default voice (54 available) |
+| `KOKORO_SPEED` | `1.0` | Speech speed (0.5–2.0) |
+| `KOKORO_MODEL_PATH` | `kokoro-v1.0.onnx` | Path to ONNX model |
+| `KOKORO_VOICES_PATH` | `voices-v1.0.bin` | Path to voices file |
+
+### STT (`stt/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STT_PORT` | `10200` | Wyoming TCP port |
+| `STT_HOST` | `0.0.0.0` | Listen address |
+| `WHISPER_MODEL` | `medium.en` | Whisper model name |
+
+## Home Assistant Integration
+
+### 1. Wyoming STT
+
+Start the STT service (`python stt/server.py`). Home Assistant should auto-discover it via mDNS (service: `kids-agent-stt`). If not, add a **Wyoming** integration manually with the STT host and port.
+
+### 2. Wyoming TTS
+
+Start the TTS service (`python tts/server.py`). Same discovery flow — service name is `kids-agent-tts`. Add manually if needed.
+
+### 3. Extended OpenAI Conversation (Agent)
+
+Install **Extended OpenAI Conversation** via HACS, then configure:
+
+| Setting | Value |
+|---------|-------|
+| Endpoint | `http://<agent-host>:4111/v1/chat/completions` |
+| API Key | Your `OPENAI_API_KEY` (or any non-empty string if skip-auth is on) |
+| Model | `kids-agent` or `learning-buddy` |
+
+The agent exposes `/v1/models` listing both names. Both resolve to the same underlying agent.
+
+### 4. Voice Assistant Pipeline
+
+In HA, go to **Settings → Voice assistants** and create a pipeline:
+
+1. **Wake word** — use Satellite1's built-in ("Hey Jarvis" or "Okay Nabu")
+2. **STT** — select the Wyoming STT device
+3. **Conversation agent** — select the Extended OpenAI Conversation entry
+4. **TTS** — select the Wyoming TTS device
+
+## Testing
+
+See [`tests/README.md`](tests/README.md) for details on individual and integration tests.
+
+```bash
+./dev.sh   # start all services first
+# Then in another terminal:
+python tests/test_stt.py           # Wyoming STT (port 10200)
+python tests/test_tts.py           # Wyoming TTS (port 10201)
+bash tests/test_agent.sh           # Agent HTTP (port 4111)
+python tests/test_integration.py   # Full pipeline
+```
 
 ## Project Structure
 
 ```
 kids-agent/
-  agent/              # Mastra agent server (Node.js)
-    src/mastra/
-      index.ts            # Mastra entry point + storage
-      agents/
-        kids-agent.ts   # Agent with memory + system prompt
-    package.json
-    tsconfig.json
-    .env.example
-  stt/                # Speech-to-text (Python)
-    server.py              # FastAPI server
-    download_model.py      # Pre-download Whisper model
-    requirements.txt
-    .env.example
-  tts/                # Text-to-speech (Python)
-    server.py              # FastAPI server (kokoro-onnx)
-    download_model.py      # Pre-download Kokoro model
-    requirements.txt
-    .env.example
-  tests/              # Sanity test scripts
-    test_agent.sh          # Agent generate + stream
-    test_tts.py            # TTS synthesis test
-    test_stt.py            # STT transcription test
-    test_integration.py    # Full pipeline test
-    README.md
-  research/           # Architecture research docs
-  README.md           # This file
+├── agent/                  # Mastra agent (Node.js)
+│   ├── src/mastra/
+│   │   ├── index.ts            # Mastra entry + OpenAI-compatible routes
+│   │   └── agents/
+│   │       └── kids-agent.ts   # Agent definition + system prompt
+│   └── .env.example
+├── stt/                    # Speech-to-text (Python, Wyoming)
+│   ├── server.py               # Wyoming STT server
+│   └── download_model.py
+├── tts/                    # Text-to-speech (Python, Wyoming)
+│   ├── server.py               # Wyoming TTS server
+│   └── download_model.py
+├── tests/                  # Test scripts (see tests/README.md)
+├── research/               # Architecture research + decisions
+│   └── HANDOFF.md              # Full project context
+└── dev.sh                  # Dev launcher (all services)
 ```
-
-## Key Voices (for kids)
-
-| Voice | Gender | Notes |
-|-------|--------|-------|
-| af_heart | Female | Default - warm, friendly |
-| af_sky | Female | Bright, clear |
-| af_sarah | Female | Warm, measured |
-| af_nicole | Female | Natural, conversational |
-| af_bella | Female | Softer tone |
-| am_adam | Male | Male option |
-| am_michael | Male | Male option |
 
 ## Hardware
 
-- Voice I/O: FutureProofHomes Satellite1 (Wyoming satellite) - not yet connected
-- GPU: NVIDIA RTX 3060 (12GB VRAM)
-- VRAM Budget: ~2GB total (STT: ~1.5GB, TTS: ~0.5GB)
-- Headroom: ~10GB for future local LLM or other models
+- **Voice I/O**: Satellite1 (Wyoming satellite, ESPHome) — not yet connected
+- **GPU**: NVIDIA RTX 3060 (12GB VRAM) — STT ~1.5GB + TTS ~0.5GB ≈ 2GB total
+- **Latency target**: <800ms mouth-to-ear
 
-## Next Steps
+## More Context
 
-After this vertical slice works:
-1. Wyoming protocol bridge for Kokoro TTS (connect to Home Assistant)
-2. Home Assistant integration via Extended OpenAI Conversation (HACS)
-3. Safety pipeline (keyword filter + toxicity classifier + output screening)
-4. Satellite1 hardware setup and ESPHome configuration
-5. End-to-end voice pipeline testing with real hardware
-6. LLM provider benchmarking (Groq, Claude, GPT-4o) for lowest latency
-7. Voice selection testing with the kids
+- **Per-service docs**: [`agent/README.md`](agent/README.md), [`stt/README.md`](stt/README.md), [`tts/README.md`](tts/README.md)
+- **Full project handoff**: [`research/HANDOFF.md`](research/HANDOFF.md)
+- **Architecture decisions**: [`research/08-decisions.md`](research/08-decisions.md)
