@@ -119,9 +119,9 @@ mkdir -p "$LOG_DIR"
 # Reads stdin, prepends color-coded tag, relays to stdout
 prefix_pipe() {
     local color=$1 label=$2 pipe=$3
-    while IFS= read -r line; do
+    tail -f "$pipe" | while IFS= read -r line; do
         printf "${color}${BOLD}[${label}]${RESET} %s\n" "$line"
-    done < "$pipe" &
+    done &
     echo $! >> "$PIDS_FILE"
 }
 
@@ -156,7 +156,7 @@ log "Starting TTS on :$TTS_PORT..."
 (
     cd "$ROOT/tts"
     source venv/bin/activate
-    python server.py 2>&1
+    PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/tts.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
 prefix_pipe "$TTS_COLOR" " tts " "$LOG_DIR/tts.pipe" &
@@ -168,7 +168,7 @@ log "Starting STT on :$STT_PORT..."
 (
     cd "$ROOT/stt"
     source venv/bin/activate
-    python server.py 2>&1
+    PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/stt.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
 prefix_pipe "$STT_COLOR" " stt " "$LOG_DIR/stt.pipe" &

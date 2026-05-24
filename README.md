@@ -21,7 +21,7 @@ Satellite1 (wake word)
   → Satellite1 speaker
 ```
 
-The agent exposes an OpenAI Chat Completions–compatible API (`/v1/chat/completions`, `/v1/models`) so Home Assistant's **Extended OpenAI Conversation** integration can call it directly. STT and TTS register as Wyoming devices and are discovered by Home Assistant via Zeroconf/mDNS.
+The agent exposes an OpenAI Chat Completions–compatible API (`/v1/chat/completions`, `/v1/models`) so Home Assistant's **Extended OpenAI Conversation** integration can call it directly. All agent responses pass through a `RegexFilterProcessor` that strips emoji (including ZWJ sequences and flag tags) before the text reaches TTS — since every response is read aloud, emoji would only add noise. STT and TTS register as Wyoming devices and are discovered by Home Assistant via Zeroconf/mDNS.
 
 ## Quick Start
 

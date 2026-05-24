@@ -22,7 +22,21 @@ AI voice agent for kids, built with Mastra framework.
 
 4. Open Mastra Studio at http://localhost:4111
 
+## Output Processing
+
+All agent responses pass through an output processor that strips emoji characters before they reach the caller. This uses Mastra's built-in `RegexFilterProcessor` configured with a single rule that matches:
+
+- Standard emoji (`Emoji_Presentation`)
+- Extended pictographic symbols (`Extended_Pictographic`)
+- Zero-width joiner sequences (`U+200D`)
+- Variation selectors (`U+FE0F`)
+- Subdivision flag tags (`U+E0020`–`U+E007F`)
+
+**Why:** Responses are read aloud via TTS, which cannot render emoji characters. The processor is always active and requires no configuration.
+
 ## API Endpoints
+
+### Mastra Agent API
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -30,15 +44,26 @@ AI voice agent for kids, built with Mastra framework.
 | POST | `/api/agents/kids-agent/generate` | Generate response |
 | POST | `/api/agents/kids-agent/stream` | Stream response |
 
+### OpenAI-Compatible API
+
+Used by Home Assistant's Extended OpenAI Conversation integration.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v1/chat/completions` | Chat completions (streaming and non-streaming) |
+| GET | `/v1/models` | List available models (agents) |
+
+The `model` field in requests maps to agent names: `kids-agent` and `learning-buddy` both resolve to the kids agent. Both endpoints support SSE streaming (set `"stream": true`) and standard JSON responses.
+
 ## Testing with curl
 
 ```bash
-# Non-streaming
+# Non-streaming (Mastra API)
 curl -X POST http://localhost:4111/api/agents/kids-agent/generate \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 
-# Streaming
+# Streaming (Mastra API)
 curl -X POST http://localhost:4111/api/agents/kids-agent/stream \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "How do you spell butterfly?"}]}'
@@ -51,6 +76,19 @@ curl -X POST http://localhost:4111/api/agents/kids-agent/generate \
     "resourceId": "user-zoe",
     "threadId": "conversation-1"
   }'
+
+# OpenAI-compatible (non-streaming)
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "kids-agent", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# OpenAI-compatible (streaming)
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "kids-agent", "stream": true, "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# List available models
+curl http://localhost:4111/v1/models
 ```
 
 ## Environment Variables

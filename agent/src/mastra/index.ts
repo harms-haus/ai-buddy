@@ -71,8 +71,12 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     if (stream) {
       const streamResult = await agent.stream(lastUserMessage, {
         ...(threadId && { threadId }),
-        maxTokens,
-        ...(temperature !== undefined && { temperature }),
+        ...(maxTokens !== undefined || temperature !== undefined) && {
+          modelSettings: {
+            ...(maxTokens !== undefined && { maxTokens }),
+            ...(temperature !== undefined && { temperature }),
+          },
+        },
       });
 
       const id = `chatcmpl-${Date.now().toString(36)}`;
@@ -156,8 +160,12 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     // --- Non-streaming response ---
     const result = await agent.generate(lastUserMessage, {
       ...(threadId && { threadId }),
-      maxTokens,
-      ...(temperature !== undefined && { temperature }),
+      ...(maxTokens !== undefined || temperature !== undefined) && {
+        modelSettings: {
+          ...(maxTokens !== undefined && { maxTokens }),
+          ...(temperature !== undefined && { temperature }),
+        },
+      },
     });
     const elapsed = ((performance.now() - t_start) / 1000).toFixed(2);
     console.log(`[agent] response (generate) | elapsed=${elapsed}s | chars=${result.text.length} | text=${JSON.stringify(result.text)}`);
