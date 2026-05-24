@@ -20,7 +20,7 @@ try:
 except ImportError:
     HAS_ZEROCONF = False
 
-SAMPLES_PER_CHUNK = 1024
+SAMPLES_PER_CHUNK = 8192
 RATE = 24000
 WIDTH = 2  # 16-bit = 2 bytes
 CHANNELS = 1
@@ -109,6 +109,11 @@ class TtsEventHandler(AsyncEventHandler):
             voice = synthesize.voice.name if synthesize.voice else self._default_voice
             speed = self._default_speed  # Wyoming doesn't pass speed, use default
 
+            if len(text) > 5000:
+                from wyoming.error import Error
+                await self.write_event(Error(text="Text too long (max 5000 chars)", code="InputTooLong").event())
+                return False
+
             try:
                 # Send AudioStart
                 await self.write_event(
@@ -119,8 +124,10 @@ class TtsEventHandler(AsyncEventHandler):
                 async for chunk_audio, sr in self._pipeline.create_stream(
                     text, voice=voice, speed=speed
                 ):
-                    # Convert float32 → int16 PCM bytes
-                    pcm = (np.clip(chunk_audio, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+                    # Convert float32 → int16 PCM bytes (in-place to reduce allocations)
+                    chunk_audio = np.clip(chunk_audio, -1.0, 1.0)
+                    chunk_audio = (chunk_audio * 32767).astype(np.int16)
+                    pcm = chunk_audio.tobytes()
 
                     # Split into sub-chunks of SAMPLES_PER_CHUNK samples
                     bytes_per_chunk = WIDTH * CHANNELS * SAMPLES_PER_CHUNK
@@ -139,9 +146,11 @@ class TtsEventHandler(AsyncEventHandler):
                 await self.write_event(AudioStop().event())
 
             except Exception as err:
+                import sys
                 from wyoming.error import Error
+                print(f"[TTS] Error: {err}", file=sys.stderr)
                 await self.write_event(
-                    Error(text=str(err), code=err.__class__.__name__).event()
+                    Error(text="Synthesis failed", code="SynthesisError").event()
                 )
                 raise
 

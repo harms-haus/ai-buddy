@@ -18,6 +18,7 @@ except ImportError:
 from wyoming.server import AsyncServer, AsyncEventHandler
 from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioStart, AudioChunk, AudioStop, AudioChunkConverter
+from wyoming.error import Error
 from wyoming.info import Info, AsrProgram, AsrModel, Attribution, Describe
 
 try:
@@ -42,6 +43,10 @@ def get_device_and_compute():
 # Wyoming event handler
 # ---------------------------------------------------------------------------
 
+# 60 seconds of 16 kHz 16-bit mono audio
+MAX_AUDIO_BYTES = 16000 * 2 * 1 * 60  # 1_920_000
+
+
 class SttEventHandler(AsyncEventHandler):
     """Handles a single Wyoming client connection for STT."""
 
@@ -51,9 +56,10 @@ class SttEventHandler(AsyncEventHandler):
         self._model = whisper_model
         self._gpu_sem = gpu_sem
         self._audio_converter: AudioChunkConverter | None = None
-        self._wav_dir = tempfile.TemporaryDirectory()
-        self._wav_path = os.path.join(self._wav_dir.name, "speech.wav")
+        self._wav_dir: tempfile.TemporaryDirectory | None = None
+        self._wav_path: str | None = None
         self._wav_file: wave.Wave_write | None = None
+        self._audio_bytes_written: int = 0
         self._language: str | None = None
 
     async def handle_event(self, event) -> bool:
@@ -82,32 +88,57 @@ class SttEventHandler(AsyncEventHandler):
             if self._audio_converter:
                 chunk = self._audio_converter.convert(chunk)
             if self._wav_file is None:
+                self._wav_dir = tempfile.TemporaryDirectory()
+                self._wav_path = os.path.join(self._wav_dir.name, "speech.wav")
                 self._wav_file = wave.open(self._wav_path, "wb")
                 self._wav_file.setframerate(chunk.rate)
                 self._wav_file.setsampwidth(chunk.width)
                 self._wav_file.setnchannels(chunk.channels)
             self._wav_file.writeframes(chunk.audio)
+            self._audio_bytes_written += len(chunk.audio)
+            if self._audio_bytes_written > MAX_AUDIO_BYTES:
+                await self.write_event(
+                    Error(text="Audio exceeds maximum duration").event()
+                )
+                return False
             return True
 
         # AudioStop → transcribe and return result
         if AudioStop.is_type(event.type):
-            if self._wav_file:
-                self._wav_file.close()
-                self._wav_file = None
+            try:
+                if self._wav_file:
+                    self._wav_file.close()
+                    self._wav_file = None
 
-            async with self._gpu_sem:
-                text = await asyncio.to_thread(
-                    self._transcribe, self._wav_path
+                async with self._gpu_sem:
+                    text = await asyncio.to_thread(
+                        self._transcribe, self._wav_path
+                    )
+
+                await self.write_event(
+                    Transcript(text=text, language=self._language or "en").event()
                 )
-
-            await self.write_event(
-                Transcript(text=text, language=self._language or "en").event()
-            )
-            # Reset state
-            self._language = None
+            finally:
+                if self._wav_file is not None:
+                    self._wav_file.close()
+                    self._wav_file = None
+                if self._wav_dir is not None:
+                    self._wav_dir.cleanup()
+                    self._wav_dir = None
+                    self._wav_path = None
+                self._audio_bytes_written = 0
+                self._language = None
             return False  # disconnect
 
         return True
+
+    async def disconnect(self) -> None:
+        """Cleanup on client disconnect."""
+        if self._wav_file is not None:
+            self._wav_file.close()
+            self._wav_file = None
+        if self._wav_dir is not None:
+            self._wav_dir.cleanup()
 
     def _transcribe(self, wav_path: str) -> str:
         """Run Whisper transcription (blocking – call via to_thread)."""
