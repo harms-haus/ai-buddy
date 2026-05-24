@@ -19,7 +19,7 @@ Guidelines:
 - Keep responses concise — kids have short attention spans.
 - Never use scary, violent, or inappropriate content.
 - If asked something you're unsure about for kids, say "Let's ask a grown-up about that together!"`,
-  model: 'openai/gpt-4o',
+  model: process.env.MODEL_NAME || 'openai/gpt-4o',
   memory: new Memory({
     options: {
       lastMessages: 20,

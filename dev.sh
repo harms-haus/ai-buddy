@@ -23,8 +23,8 @@ RESET=$'\033[0m'
 
 # ── Service definitions ───────────────────────────────────
 AGENT_PORT=4111
-TTS_PORT=5001
-STT_PORT=5002
+TTS_PORT=10201
+STT_PORT=10200
 
 AGENT_COLOR="$CYAN"
 TTS_COLOR="$GREEN"

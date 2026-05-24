@@ -1,64 +1,50 @@
-# STT Service — faster-whisper
+# STT Service — faster-whisper (Wyoming Protocol)
 
-Speech-to-text service using faster-whisper with GPU acceleration.
+Speech-to-text using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2-based Whisper), exposed via [Wyoming protocol](https://github.com/OHF-Voice/wyoming) for Home Assistant integration.
 
 ## Setup
 
-1. Create a virtual environment:
-   ```bash
-   cd stt
-   python -m venv venv
-   source venv/bin/activate
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. (Optional) Pre-download the model:
-   ```bash
-   python download_model.py
-   ```
-
-4. Configure:
-   ```bash
-   cp .env.example .env
-   ```
-
-5. Start the server:
-   ```bash
-   python server.py
-   ```
-
-## API
-
-### POST /stt
-Upload an audio file for transcription.
-
 ```bash
-curl -X POST http://localhost:5002/stt \
-  -F "file=@recording.wav"
+cd stt
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Response:
-```json
-{
-  "text": "Hello how are you",
-  "language": "en",
-  "language_probability": 0.99,
-  "duration": 2.5,
-  "segments": [{"start": 0.0, "end": 2.5, "text": "Hello how are you"}]
-}
+To pre-download the model:
+```bash
+python download_model.py
 ```
-
-### GET /health
-Health check.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| STT_PORT | 5002 | Server port |
-| STT_HOST | 0.0.0.0 | Server host |
-| WHISPER_MODEL | medium.en | Whisper model name |
+| `STT_PORT` | `10200` | Wyoming TCP port |
+| `STT_HOST` | `0.0.0.0` | Listen address |
+| `WHISPER_MODEL` | `medium.en` | Whisper model name |
+
+GPU device and compute type are auto-detected (CUDA if available, otherwise CPU).
+
+## Running
+
+```bash
+python server.py
+```
+
+The server registers with Home Assistant via Zeroconf/mDNS (service: `kids-agent-stt`). If HA doesn't auto-discover, manually add a Wyoming integration with host:port.
+
+## Wyoming Protocol
+
+Implements ASR (Automatic Speech Recognition) via Wyoming TCP protocol:
+
+- **Describe** → returns Info with ASR programs and models
+- **Transcribe** → sets language/context
+- **AudioStart / AudioChunk / AudioStop** → receives PCM audio (16kHz, 16-bit, mono)
+- **Transcript** → returns transcribed text
+
+## Testing
+
+```bash
+python tests/test_stt.py
+```

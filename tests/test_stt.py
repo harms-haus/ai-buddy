@@ -1,62 +1,90 @@
 #!/usr/bin/env python3
-"""Sanity test for STT Service"""
-import wave
+"""STT Wyoming server test."""
+
+import asyncio
 import struct
-import tempfile
-import os
+import math
+import sys
 
-STT_URL = "http://localhost:5002"
+from wyoming.client import AsyncClient
+from wyoming.asr import Transcribe, Transcript
+from wyoming.audio import AudioStart, AudioChunk, AudioStop
+from wyoming.info import Describe, Info
 
-def generate_test_audio():
-    """Generate a simple test WAV file (sine wave — tests endpoint but won't transcribe to words)."""
-    sample_rate = 16000
-    duration = 2.0
-    frequency = 440
-    
-    n_samples = int(sample_rate * duration)
-    samples = []
-    for i in range(n_samples):
-        t = i / sample_rate
-        value = int(32767 * 0.5 * (1 if (t * frequency) % 1 < 0.5 else -1))
-        samples.append(struct.pack('<h', value))
-    
-    tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-    with wave.open(tmp.name, 'w') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(b''.join(samples))
-    return tmp.name
+STT_URI = "tcp://localhost:10200"
 
-def test_health():
-    import requests
-    print("[1/2] Health check...")
-    r = requests.get(f"{STT_URL}/health")
-    assert r.status_code == 200, f"Health check failed: {r.status_code}"
-    data = r.json()
-    print(f"  Status: {data['status']}, Model: {data['model']}, Device: {data['device']}")
 
-def test_stt():
-    import requests
-    print("[2/2] POST /stt with test audio...")
-    audio_path = generate_test_audio()
+def generate_sine_wav_pcm(duration_sec: float = 2.0, freq: float = 440.0, sample_rate: int = 16000) -> bytes:
+    """Generate a sine wave as raw PCM bytes (16-bit, mono)."""
+    num_samples = int(duration_sec * sample_rate)
+    pcm = bytearray()
+    for i in range(num_samples):
+        sample = math.sin(2 * math.pi * freq * i / sample_rate)
+        pcm.extend(struct.pack("<h", int(sample * 16000)))  # 16-bit signed
+    return bytes(pcm)
+
+
+async def test_describe():
+    """Test Describe → Info response."""
+    print("Testing Describe...")
+    client = AsyncClient.from_uri(STT_URI)
+    await client.connect()
+    await client.write_event(Describe().event())
+    event = await client.read_event()
+    assert event is not None, "No response from server"
+    assert Info.is_type(event.type), f"Expected Info, got {event.type}"
+    info = Info.from_event(event)
+    assert len(info.asr) > 0, "No ASR programs in Info"
+    print(f"  ✓ ASR programs: {[p.name for p in info.asr]}")
+    print(f"  ✓ Models: {[[m.name for m in p.models] for p in info.asr]}")
+    await client.disconnect()
+
+
+async def test_transcribe():
+    """Test Transcribe → AudioStart/Chunk/Stop → Transcript."""
+    print("Testing Transcribe...")
+    pcm = generate_sine_wav_pcm()
+
+    client = AsyncClient.from_uri(STT_URI)
+    await client.connect()
+    await client.write_event(Transcribe(language="en").event())
+    await client.write_event(AudioStart(rate=16000, width=2, channels=1).event())
+
+    # Send audio in chunks
+    chunk_size = 4096
+    for i in range(0, len(pcm), chunk_size):
+        await client.write_event(
+            AudioChunk(
+                audio=pcm[i:i+chunk_size],
+                rate=16000,
+                width=2,
+                channels=1,
+            ).event()
+        )
+
+    await client.write_event(AudioStop().event())
+
+    # Read response
+    event = await client.read_event()
+    assert event is not None, "No transcript response"
+    assert Transcript.is_type(event.type), f"Expected Transcript, got {event.type}"
+    transcript = Transcript.from_event(event)
+    print(f"  ✓ Transcript: '{transcript.text}'")
+    print(f"  ✓ Language: {transcript.language}")
+    await client.disconnect()
+
+
+async def main():
+    print("=== STT Wyoming Server Tests ===\n")
     try:
-        with open(audio_path, 'rb') as f:
-            r = requests.post(
-                f"{STT_URL}/stt",
-                files={"file": ("test.wav", f, "audio/wav")},
-            )
-        assert r.status_code == 200, f"STT failed: {r.status_code} - {r.text}"
-        data = r.json()
-        print(f"  Text: '{data['text']}'")
-        print(f"  Language: {data['language']} ({data['language_probability']})")
-        print(f"  Duration: {data['duration']}s")
-        print("  Note: Test audio is a sine wave — transcription may be empty, that's OK!")
-    finally:
-        os.unlink(audio_path)
+        await test_describe()
+        print()
+        await test_transcribe()
+        print("\n✅ All STT tests passed!")
+    except Exception as e:
+        print(f"\n❌ Test failed: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    print("=== Testing STT Service ===")
-    test_health()
-    test_stt()
-    print("\n=== All STT tests passed! ===")
+    asyncio.run(main())

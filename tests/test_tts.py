@@ -1,63 +1,94 @@
 #!/usr/bin/env python3
-"""Sanity test for TTS Service"""
+"""TTS Wyoming server test."""
+
+import asyncio
 import sys
 
-TTS_URL = "http://localhost:5001"
+from wyoming.client import AsyncClient
+from wyoming.tts import Synthesize
+from wyoming.audio import AudioStart, AudioChunk, AudioStop
+from wyoming.info import Describe, Info
 
-def test_health():
-    import requests
-    print("[1/4] Health check...")
-    r = requests.get(f"{TTS_URL}/health")
-    assert r.status_code == 200, f"Health check failed: {r.status_code}"
-    data = r.json()
-    print(f"  Status: {data['status']}, Voices: {data.get('voices', [])[:5]}...")
-    return data
+TTS_URI = "tcp://localhost:10201"
 
-def test_voices():
-    import requests
-    print("[2/4] List voices...")
-    r = requests.get(f"{TTS_URL}/voices")
-    assert r.status_code == 200, f"Voices endpoint failed: {r.status_code}"
-    voices = r.json()['voices']
-    print(f"  Available voices: {len(voices)} total")
-    return voices
 
-def test_tts_post():
-    import requests
-    print("[3/4] POST /tts...")
-    r = requests.post(
-        f"{TTS_URL}/tts",
-        json={"text": "Hello! How are you today?", "voice": "af_heart", "speed": 1.0},
+async def test_describe():
+    """Test Describe → Info response."""
+    print("Testing Describe...")
+    client = AsyncClient.from_uri(TTS_URI)
+    await client.connect()
+    await client.write_event(Describe().event())
+    event = await client.read_event()
+    assert event is not None, "No response from server"
+    assert Info.is_type(event.type), f"Expected Info, got {event.type}"
+    info = Info.from_event(event)
+    assert len(info.tts) > 0, "No TTS programs in Info"
+    voices = [v.name for p in info.tts for v in p.voices]
+    print(f"  ✓ TTS programs: {[p.name for p in info.tts]}")
+    print(f"  ✓ Voices ({len(voices)}): {voices[:5]}...")
+    await client.disconnect()
+
+
+async def test_synthesize():
+    """Test Synthesize → AudioStart/Chunk*/AudioStop."""
+    print("Testing Synthesize...")
+    client = AsyncClient.from_uri(TTS_URI)
+    await client.connect()
+    await client.write_event(
+        Synthesize(text="Hello world, this is a test.", voice=None).event()
     )
-    assert r.status_code == 200, f"TTS POST failed: {r.status_code}"
-    output_file = "tests/output_tts_post.wav"
-    with open(output_file, "wb") as f:
-        f.write(r.content)
-    print(f"  Saved to {output_file} ({len(r.content)} bytes)")
-    assert r.content[:4] == b'RIFF', "Not a valid WAV file!"
-    print("  Valid WAV file ✓")
-    return output_file
 
-def test_tts_get():
-    import requests
-    print("[4/4] GET /tts...")
-    r = requests.get(
-        f"{TTS_URL}/tts",
-        params={"text": "Spelling test: C A T spells cat!", "voice": "af_heart"},
-    )
-    assert r.status_code == 200, f"TTS GET failed: {r.status_code}"
-    output_file = "tests/output_tts_get.wav"
-    with open(output_file, "wb") as f:
-        f.write(r.content)
-    print(f"  Saved to {output_file} ({len(r.content)} bytes)")
-    assert r.content[:4] == b'RIFF', "Not a valid WAV file!"
-    print("  Valid WAV file ✓")
-    return output_file
+    # Collect audio chunks
+    audio_chunks = []
+    rate = width = channels = None
+
+    while True:
+        event = await client.read_event()
+        assert event is not None, "Server disconnected unexpectedly"
+
+        if AudioStart.is_type(event.type):
+            start = AudioStart.from_event(event)
+            rate = start.rate
+            width = start.width
+            channels = start.channels
+            print(f"  ✓ AudioStart: {rate}Hz, {width*8}bit, {channels}ch")
+        elif AudioChunk.is_type(event.type):
+            chunk = AudioChunk.from_event(event)
+            audio_chunks.append(chunk.audio)
+        elif AudioStop.is_type(event.type):
+            print(f"  ✓ AudioStop")
+            break
+
+    total_audio = b"".join(audio_chunks)
+    print(f"  ✓ Total audio: {len(total_audio)} bytes")
+    assert len(total_audio) > 0, "No audio received"
+    assert rate == 24000, f"Expected 24000Hz, got {rate}"
+    assert width == 2, f"Expected 16-bit, got {width*8}-bit"
+
+    # Save to WAV for manual verification
+    import wave
+    output_path = "tests/output_tts.wav"
+    with wave.open(output_path, "wb") as wf:
+        wf.setframerate(rate)
+        wf.setsampwidth(width)
+        wf.setnchannels(channels)
+        wf.writeframes(total_audio)
+    print(f"  ✓ Saved to {output_path}")
+
+    await client.disconnect()
+
+
+async def main():
+    print("=== TTS Wyoming Server Tests ===\n")
+    try:
+        await test_describe()
+        print()
+        await test_synthesize()
+        print("\n✅ All TTS tests passed!")
+    except Exception as e:
+        print(f"\n❌ Test failed: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    print("=== Testing TTS Service ===")
-    test_health()
-    test_voices()
-    test_tts_post()
-    test_tts_get()
-    print("\n=== All TTS tests passed! ===")
+    asyncio.run(main())

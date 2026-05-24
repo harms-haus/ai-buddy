@@ -1,73 +1,97 @@
 #!/usr/bin/env python3
-"""
-Integration test: Full pipeline test
-Text → Agent → TTS → Audio → STT → Text
-"""
-import io
+"""Integration test: Agent → TTS → STT round-trip."""
+
+import asyncio
 import sys
+import requests
+
+from wyoming.client import AsyncClient
+from wyoming.tts import Synthesize
+from wyoming.asr import Transcribe, Transcript
+from wyoming.audio import AudioStart, AudioChunk, AudioStop
 
 AGENT_URL = "http://localhost:4111"
-TTS_URL = "http://localhost:5001"
-STT_URL = "http://localhost:5002"
+TTS_URI = "tcp://localhost:10201"
+STT_URI = "tcp://localhost:10200"
 
-def test_full_pipeline():
-    import requests
-    
-    print("=== Integration Test: Full Pipeline ===")
-    test_message = "What color is the sky?"
-    
-    # Step 1: Get agent response
-    print(f"[1/3] Getting agent response for: '{test_message}'")
-    r = requests.post(
+
+def query_agent(text: str) -> str:
+    """Query the Mastra agent via HTTP."""
+    resp = requests.post(
         f"{AGENT_URL}/api/agents/kids-agent/generate",
-        json={"messages": [{"role": "user", "content": test_message}]},
+        json={"messages": [{"role": "user", "content": text}]},
     )
-    assert r.status_code == 200, f"Agent failed: {r.status_code} - {r.text}"
-    
-    agent_response = r.json()
-    # Try to extract text from various response formats
-    response_text = ''
-    if isinstance(agent_response, dict):
-        response_text = agent_response.get('text', '')
-        if not response_text:
-            msg = agent_response.get('message', {})
-            if isinstance(msg, dict):
-                response_text = msg.get('content', '')
-            elif isinstance(msg, str):
-                response_text = msg
-        if not response_text:
-            # Mastra may return different format
-            response_text = str(agent_response.get('response', agent_response.get('result', '')))
-    if not response_text:
-        response_text = str(agent_response)
-    
-    print(f"  Agent said: {response_text[:200]}")
-    
-    # Step 2: Convert to speech
-    print("[2/3] Converting to speech...")
-    r = requests.post(
-        f"{TTS_URL}/tts",
-        json={"text": response_text[:500], "voice": "af_heart"},
-    )
-    assert r.status_code == 200, f"TTS failed: {r.status_code}"
-    assert r.content[:4] == b'RIFF', "Not a valid WAV file!"
-    audio_data = r.content
-    print(f"  Got audio: {len(audio_data)} bytes")
-    
-    # Step 3: Transcribe back
-    print("[3/3] Transcribing audio back...")
-    r = requests.post(
-        f"{STT_URL}/stt",
-        files={"file": ("speech.wav", io.BytesIO(audio_data), "audio/wav")},
-    )
-    assert r.status_code == 200, f"STT failed: {r.status_code} - {r.text}"
-    transcription = r.json()
-    print(f"  Transcribed: '{transcription['text']}'")
-    
-    print("\n=== Integration test complete! ===")
-    print(f"Original:  {test_message}")
-    print(f"Agent:     {response_text[:200]}")
-    print(f"Roundtrip: {transcription['text']}")
+    resp.raise_for_status()
+    return resp.json()["text"]
+
+
+async def tts_synthesize(text: str) -> tuple[bytes, int, int, int]:
+    """Synthesize text via Wyoming TTS. Returns (pcm_bytes, rate, width, channels)."""
+    client = AsyncClient.from_uri(TTS_URI)
+    await client.connect()
+    await client.write_event(Synthesize(text=text).event())
+
+    chunks = []
+    rate = width = channels = None
+    while True:
+        event = await client.read_event()
+        if AudioStart.is_type(event.type):
+            s = AudioStart.from_event(event)
+            rate, width, channels = s.rate, s.width, s.channels
+        elif AudioChunk.is_type(event.type):
+            chunks.append(AudioChunk.from_event(event).audio)
+        elif AudioStop.is_type(event.type):
+            break
+    await client.disconnect()
+    return b"".join(chunks), rate, width, channels
+
+
+async def stt_transcribe(pcm: bytes, rate: int, width: int, channels: int) -> str:
+    """Transcribe audio via Wyoming STT."""
+    client = AsyncClient.from_uri(STT_URI)
+    await client.connect()
+    await client.write_event(Transcribe(language="en").event())
+    await client.write_event(AudioStart(rate=rate, width=width, channels=channels).event())
+
+    chunk_size = 4096
+    for i in range(0, len(pcm), chunk_size):
+        await client.write_event(
+            AudioChunk(audio=pcm[i:i+chunk_size], rate=rate, width=width, channels=channels).event()
+        )
+    await client.write_event(AudioStop().event())
+
+    event = await client.read_event()
+    assert Transcript.is_type(event.type)
+    text = Transcript.from_event(event).text
+    await client.disconnect()
+    return text
+
+
+async def main():
+    print("=== Integration Test: Agent → TTS → STT ===\n")
+    try:
+        # Step 1: Query agent
+        print("1. Querying agent...")
+        agent_text = query_agent("Say hello in one short sentence.")
+        print(f"   Agent: {agent_text}")
+
+        # Step 2: TTS
+        print("2. Synthesizing speech...")
+        pcm, rate, width, channels = await tts_synthesize(agent_text)
+        print(f"   Audio: {len(pcm)} bytes, {rate}Hz, {width*8}bit, {channels}ch")
+
+        # Step 3: STT
+        print("3. Transcribing back...")
+        result = await stt_transcribe(pcm, rate, width, channels)
+        print(f"   Transcript: {result}")
+
+        print("\n✅ Integration test complete!")
+    except Exception as e:
+        print(f"\n❌ Integration test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    test_full_pipeline()
+    asyncio.run(main())
