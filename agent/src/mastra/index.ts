@@ -3,6 +3,7 @@ import { LibSQLStore } from '@mastra/libsql';
 import { registerApiRoute } from '@mastra/core/server';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { performance } from 'perf_hooks';
 
 import { kidsAgent } from './agents/kids-agent.js';
 
@@ -60,6 +61,8 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
       .filter((m) => m.role === 'user')
       .map((m) => m.content);
     const lastUserMessage = userMessages[userMessages.length - 1] ?? '';
+    const t_start = performance.now();
+    console.log(`[agent] request | chars=${lastUserMessage.length} | text=${JSON.stringify(lastUserMessage)}`);
 
     // Build thread ID from conversation metadata if provided
     const threadId = body.thread_id as string | undefined;
@@ -104,6 +107,9 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
                 }),
               );
             }
+
+            const elapsed = ((performance.now() - t_start) / 1000).toFixed(2);
+            console.log(`[agent] response (stream) | elapsed=${elapsed}s | chars=${fullText.length} | text=${JSON.stringify(fullText)}`);
 
             // Final chunk with finish_reason
             sendChunk(
@@ -153,6 +159,8 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
       maxTokens,
       ...(temperature !== undefined && { temperature }),
     });
+    const elapsed = ((performance.now() - t_start) / 1000).toFixed(2);
+    console.log(`[agent] response (generate) | elapsed=${elapsed}s | chars=${result.text.length} | text=${JSON.stringify(result.text)}`);
 
     const responseId = `chatcmpl-${Date.now().toString(36)}`;
     const created = Math.floor(Date.now() / 1000);

@@ -4,6 +4,7 @@ import os
 import asyncio
 import tempfile
 import wave
+import time
 from functools import partial
 
 from dotenv import load_dotenv
@@ -110,14 +111,19 @@ class SttEventHandler(AsyncEventHandler):
                     self._wav_file.close()
                     self._wav_file = None
 
+                t_start = time.perf_counter()
+
                 async with self._gpu_sem:
-                    text = await asyncio.to_thread(
+                    text, info = await asyncio.to_thread(
                         self._transcribe, self._wav_path
                     )
 
                 await self.write_event(
-                    Transcript(text=text, language=self._language or "en").event()
+                    Transcript(text=text, language=info.language).event()
                 )
+
+                elapsed = time.perf_counter() - t_start
+                print(f"[STT] transcription complete | audio={info.duration:.1f}s | vad_audio={info.duration_after_vad:.1f}s | elapsed={elapsed:.2f}s | chars={len(text)} | text={text!r}")
             finally:
                 if self._wav_file is not None:
                     self._wav_file.close()
@@ -149,7 +155,8 @@ class SttEventHandler(AsyncEventHandler):
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 500},
         )
-        return " ".join(seg.text for seg in segments).strip()
+        text = " ".join(seg.text for seg in segments).strip()
+        return text, info
 
 # ---------------------------------------------------------------------------
 # Server entry-point

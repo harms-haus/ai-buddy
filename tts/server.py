@@ -3,6 +3,7 @@
 import os
 import asyncio
 import math
+import time
 from functools import partial
 
 from dotenv import load_dotenv
@@ -108,11 +109,14 @@ class TtsEventHandler(AsyncEventHandler):
             text = synthesize.text
             voice = synthesize.voice.name if synthesize.voice else self._default_voice
             speed = self._default_speed  # Wyoming doesn't pass speed, use default
+            t_start = time.perf_counter()
 
             if len(text) > 5000:
                 from wyoming.error import Error
                 await self.write_event(Error(text="Text too long (max 5000 chars)", code="InputTooLong").event())
                 return False
+
+            print(f"[TTS] synthesis starting | chars={len(text)} | voice={voice} | text={text!r}")
 
             try:
                 # Send AudioStart
@@ -120,10 +124,12 @@ class TtsEventHandler(AsyncEventHandler):
                     AudioStart(rate=RATE, width=WIDTH, channels=CHANNELS).event()
                 )
 
+                total_samples = 0
                 # Use create_stream for sentence-by-sentence synthesis
                 async for chunk_audio, sr in self._pipeline.create_stream(
                     text, voice=voice, speed=speed
                 ):
+                    total_samples += len(chunk_audio)
                     # Convert float32 → int16 PCM bytes (in-place to reduce allocations)
                     chunk_audio = np.clip(chunk_audio, -1.0, 1.0)
                     chunk_audio = (chunk_audio * 32767).astype(np.int16)
@@ -144,6 +150,10 @@ class TtsEventHandler(AsyncEventHandler):
 
                 # Send AudioStop
                 await self.write_event(AudioStop().event())
+
+                elapsed = time.perf_counter() - t_start
+                audio_duration = total_samples / RATE
+                print(f"[TTS] synthesis complete | elapsed={elapsed:.2f}s | audio={audio_duration:.1f}s | chars={len(text)} | text={text!r}")
 
             except Exception as err:
                 import sys
