@@ -3,7 +3,7 @@
 set -e
 
 AGENT_URL="http://localhost:4111"
-AGENT_ID="kids-agent"
+AGENT_ID="ai-buddy"
 
 echo "=== Testing Mastra Agent Server ==="
 
@@ -35,7 +35,7 @@ echo
 echo "[5/5] Emoji stripping test..."
 RESPONSE=$(curl -s -X POST "${AGENT_URL}/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -d '{"model":"kids-agent","messages":[{"role":"user","content":"Tell me a super happy fun story about a puppy! Use lots of excitement and celebration!"}],"stream":false}')
+  -d '{"model":"ai-buddy","messages":[{"role":"user","content":"Tell me a super happy fun story about a puppy! Use lots of excitement and celebration!"}],"stream":false}')
 RESPONSE_TEXT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['message']['content'])")
 EMOJI_FOUND=$(echo "$RESPONSE_TEXT" | python3 -c "
 import sys, unicodedata

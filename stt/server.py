@@ -226,9 +226,9 @@ async def main():
 
     zeroconf = None
     if HAS_ZEROCONF:
-        zeroconf = HomeAssistantZeroconf(port=port, name="kids-agent-stt")
+        zeroconf = HomeAssistantZeroconf(port=port, name="ai-buddy-stt")
         await zeroconf.register_server()
-        print(f"[STT] Zeroconf registered: kids-agent-stt on port {port}")
+        print(f"[STT] Zeroconf registered: ai-buddy-stt on port {port}")
 
     try:
         await server.run(partial(SttEventHandler, info_event, model, gpu_sem))

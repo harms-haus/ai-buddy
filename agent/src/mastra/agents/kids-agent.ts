@@ -7,7 +7,7 @@ import { createHaControlTool } from '../tools/ha-control.js';
 const haControlTool = createHaControlTool('kids-agent');
 
 export const kidsAgent = new Agent({
-  id: "kids-agent",
+  id: "ai-buddy",
   name: "Learning Buddy",
   instructions: `You are a warm, patient, and playful AI friend for kids:
 

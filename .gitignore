@@ -22,6 +22,7 @@ venv/
 research/
 .dev-logs/
 .dev-pids
+package-lock.json
 
 # Home Assistant entity config (per-deployment)
 agent/ha-entities.json

@@ -18,7 +18,7 @@ STT_URI = "tcp://localhost:10200"
 def query_agent(text: str) -> str:
     """Query the Mastra agent via HTTP."""
     resp = requests.post(
-        f"{AGENT_URL}/api/agents/kids-agent/generate",
+        f"{AGENT_URL}/api/agents/ai-buddy/generate",
         json={"messages": [{"role": "user", "content": text}]},
     )
     resp.raise_for_status()

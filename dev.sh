@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────
-#  Kids Agent Dev Launcher
+#  AI Buddy Dev Launcher
 #  Starts all 3 services with color-coded, prefixed logs.
 #  Usage:  ./dev.sh                    (start all services, kokoro TTS)
 #          ./dev.sh --tts=chatterbox   (start with Chatterbox TTS backend)

@@ -14,7 +14,7 @@ const dbPath = path.resolve(__dirname, '../../data/mastra.db');
 
 // Map of agent IDs to Mastra agent names
 const AGENT_MAP: Record<string, string> = {
-  'kids-agent': 'kidsAgent',
+  'ai-buddy': 'kidsAgent',
   'learning-buddy': 'kidsAgent',
   'zoe-agent': 'zoeAgent',
   'zoe': 'zoeAgent',
@@ -228,7 +228,7 @@ const modelsRoute = registerApiRoute('/v1/models', {
 export const mastra = new Mastra({
   agents: { kidsAgent, zoeAgent, maxAgent },
   storage: new LibSQLStore({
-    id: 'kids-agent-storage',
+    id: 'ai-buddy-storage',
     url: `file:${dbPath}`,
   }),
   server: {

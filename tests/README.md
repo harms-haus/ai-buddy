@@ -16,7 +16,7 @@ Start all services first:
 
 Then in another terminal (with STT venv activated for wyoming client):
 ```bash
-cd /home/blake/Documents/software/kids-agent
+cd /home/blake/Documents/software/ai-buddy
 source stt/venv/bin/activate
 
 # Individual tests

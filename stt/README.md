@@ -32,7 +32,7 @@ GPU device and compute type are auto-detected (CUDA if available, otherwise CPU)
 python server.py
 ```
 
-The server registers with Home Assistant via Zeroconf/mDNS (service: `kids-agent-stt`). If HA doesn't auto-discover, manually add a Wyoming integration with host:port.
+The server registers with Home Assistant via Zeroconf/mDNS (service: `ai-buddy-stt`). If HA doesn't auto-discover, manually add a Wyoming integration with host:port.
 
 ## Wyoming Protocol
 

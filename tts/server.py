@@ -493,9 +493,9 @@ async def main():
 
     zeroconf = None
     if HAS_ZEROCONF:
-        zeroconf = HomeAssistantZeroconf(port=port, name=f"kids-agent-tts-{backend_name}")
+        zeroconf = HomeAssistantZeroconf(port=port, name=f"ai-buddy-tts-{backend_name}")
         await zeroconf.register_server()
-        print(f"Zeroconf registered: kids-agent-tts-{backend_name} on port {port}")
+        print(f"Zeroconf registered: ai-buddy-tts-{backend_name} on port {port}")
 
     try:
         await server.run(partial(

@@ -215,7 +215,7 @@ TTS_BACKEND=chatterbox python server.py
 
 ### Home Assistant integration
 
-The server registers via Zeroconf/mDNS as `kids-agent-tts-{backend}`. If Home Assistant doesn't auto-discover, manually add a **Wyoming** integration pointing to the server's host and port.
+The server registers via Zeroconf/mDNS as `ai-buddy-tts-{backend}`. If Home Assistant doesn't auto-discover, manually add a **Wyoming** integration pointing to the server's host and port.
 
 ## Wyoming Protocol
 

@@ -1,4 +1,4 @@
-# Kids AI Voice Agent
+# @harms-haus/ai-buddy
 
 A voice assistant for two young children — **Maxwell** (4.5, autistic) and **Zoe** (6) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device.
 
@@ -103,11 +103,11 @@ python download_model.py        # ~1.5GB Whisper model
 
 ### 1. Wyoming STT
 
-Start the STT service (`python stt/server.py`). Home Assistant should auto-discover it via mDNS (service: `kids-agent-stt`). If not, add a **Wyoming** integration manually with the STT host and port.
+Start the STT service (`python stt/server.py`). Home Assistant should auto-discover it via mDNS (service: `ai-buddy-stt`). If not, add a **Wyoming** integration manually with the STT host and port.
 
 ### 2. Wyoming TTS
 
-Start the TTS service (`python tts/server.py`). Same discovery flow — service name is `kids-agent-tts-{backend}` (e.g. `kids-agent-tts-kokoro`). Add manually if needed.
+Start the TTS service (`python tts/server.py`). Same discovery flow — service name is `ai-buddy-tts-{backend}` (e.g. `ai-buddy-tts-kokoro`). Add manually if needed.
 
 ### 3. Extended OpenAI Conversation (Agent)
 
@@ -117,7 +117,7 @@ Install **Extended OpenAI Conversation** via HACS, then configure:
 |---------|-------|
 | Endpoint | `http://<agent-host>:4111/v1/chat/completions` |
 | API Key | Your `OPENAI_API_KEY` (or any non-empty string if skip-auth is on) |
-| Model | `kids-agent` or `learning-buddy` |
+| Model | `ai-buddy` or `learning-buddy` |
 
 The agent exposes `/v1/models` listing both names. Both resolve to the same underlying agent.
 
@@ -146,7 +146,7 @@ python tests/test_integration.py   # Full pipeline
 ## Project Structure
 
 ```
-kids-agent/
+ai-buddy/
 ├── agent/                  # Mastra agent (Node.js)
 │   ├── src/mastra/
 │   │   ├── index.ts            # Mastra entry + OpenAI-compatible routes

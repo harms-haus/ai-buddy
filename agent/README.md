@@ -1,6 +1,6 @@
-# Kids Agent — Mastra Server
+# @harms-haus/ai-buddy — Agent Server
 
-AI voice agent for kids, built with Mastra framework.
+AI voice buddy for kids, built with Mastra framework.
 
 ## Setup
 
@@ -41,8 +41,8 @@ All agent responses pass through an output processor that strips emoji character
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/agents` | List all agents |
-| POST | `/api/agents/kids-agent/generate` | Generate response |
-| POST | `/api/agents/kids-agent/stream` | Stream response |
+| POST | `/api/agents/ai-buddy/generate` | Generate response |
+| POST | `/api/agents/ai-buddy/stream` | Stream response |
 
 ### OpenAI-Compatible API
 
@@ -53,23 +53,23 @@ Used by Home Assistant's Extended OpenAI Conversation integration.
 | POST | `/v1/chat/completions` | Chat completions (streaming and non-streaming) |
 | GET | `/v1/models` | List available models (agents) |
 
-The `model` field in requests maps to agent names: `kids-agent` and `learning-buddy` both resolve to the kids agent. Both endpoints support SSE streaming (set `"stream": true`) and standard JSON responses.
+The `model` field in requests maps to agent names: `ai-buddy` and `learning-buddy` both resolve to the default agent. Both endpoints support SSE streaming (set `"stream": true`) and standard JSON responses.
 
 ## Testing with curl
 
 ```bash
 # Non-streaming (Mastra API)
-curl -X POST http://localhost:4111/api/agents/kids-agent/generate \
+curl -X POST http://localhost:4111/api/agents/ai-buddy/generate \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 
 # Streaming (Mastra API)
-curl -X POST http://localhost:4111/api/agents/kids-agent/stream \
+curl -X POST http://localhost:4111/api/agents/ai-buddy/stream \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "How do you spell butterfly?"}]}'
 
 # With memory (conversation thread)
-curl -X POST http://localhost:4111/api/agents/kids-agent/generate \
+curl -X POST http://localhost:4111/api/agents/ai-buddy/generate \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [{"role": "user", "content": "My name is Zoe"}],
@@ -80,12 +80,12 @@ curl -X POST http://localhost:4111/api/agents/kids-agent/generate \
 # OpenAI-compatible (non-streaming)
 curl -X POST http://localhost:4111/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "kids-agent", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "ai-buddy", "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # OpenAI-compatible (streaming)
 curl -X POST http://localhost:4111/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "kids-agent", "stream": true, "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"model": "ai-buddy", "stream": true, "messages": [{"role": "user", "content": "Hello!"}]}'
 
 # List available models
 curl http://localhost:4111/v1/models
@@ -148,7 +148,7 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 
 | Agent ID | Model Name | Description |
 |----------|-----------|-------------|
-| `kids-agent` | `kids-agent` or `learning-buddy` | Generic kids agent |
+| `ai-buddy` | `ai-buddy` or `learning-buddy` | Default kids agent |
 | `zoe-agent` | `zoe-agent` or `zoe` | Zoe's personal agent |
 | `max-agent` | `max-agent` or `max` | Max's personal agent |
 
