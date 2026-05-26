@@ -121,7 +121,11 @@ The agent can control Home Assistant entities in children's rooms (lights, fans,
 
 ### Entity Configuration
 
-Each agent has a list of allowed entities with nicknames. The tool description dynamically lists available entities for the LLM. Example:
+Each agent has a list of allowed entities with nicknames. The tool description dynamically lists available entities for the LLM. Valid entity types: `light`, `switch`, `scene`, `input_boolean`, `fan`, `media_player`.
+
+#### Room Devices
+
+`light`, `switch`, `scene`, `input_boolean`, and `fan` entities appear in the `control-my-room` tool. Example:
 
 ```json
 {
@@ -144,6 +148,18 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 }
 ```
 
+#### Music Players
+
+`media_player` entities are excluded from the `control-my-room` tool and instead appear in the `control-music` tool. Add a speaker entry like:
+
+```json
+"speaker": {
+  "entity_id": "media_player.zoe_speaker",
+  "type": "media_player",
+  "description": "the speaker that plays music"
+}
+```
+
 ### Agents
 
 | Agent ID | Model Name | Description |
@@ -158,4 +174,59 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 curl -X POST http://localhost:4111/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model": "zoe-agent", "stream": true, "messages": [{"role": "user", "content": "Turn on my star show!"]}'
+```
+
+## Music Control
+
+The agent can play and control music through the **Music Assistant** integration in Home Assistant. This requires:
+
+- The [Music Assistant](https://music-assistant.io/) integration installed in Home Assistant
+- Spotify (or another music provider) linked through Music Assistant
+- A `media_player` entity configured in `ha-entities.json` for the agent (see [Music Players](#music-players))
+- The Music Assistant config entry ID is **auto-discovered** at startup via the HA WebSocket API — no manual configuration needed
+
+### Tool Reference
+
+**Tool key:** `control-music`
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `action` | yes | One of: `search`, `play`, `pause`, `resume`, `next`, `previous`, `stop` |
+| `query` | for search/play | Song name, artist, album, or playlist to search for |
+| `media_id` | play | URI or identifier from search results (overrides `query` when playing) |
+| `media_type` | no | `artist`, `album`, `track`, or `playlist` — helps narrow results |
+| `artist` | no | Artist name to refine the search |
+| `nickname` | no | Speaker nickname from `ha-entities.json`; defaults to the first configured speaker |
+
+### Two-Step Playback Flow
+
+Music playback uses a two-step flow:
+
+1. **Search** — The LLM calls `control-music` with `action: "search"` and a `query`. Results include tracks, albums, artists, and playlists with their `media_id` values.
+2. **Play** — The LLM calls `control-music` with `action: "play"` and the `media_id` from step 1.
+
+Transport controls (`pause`, `resume`, `next`, `previous`, `stop`) are single-step calls that target the configured speaker.
+
+### Examples
+
+**Search for music:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "search for Frozen songs"}]
+  }'
+```
+
+**Play a song:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "play Let It Go"}]
+  }'
 ```

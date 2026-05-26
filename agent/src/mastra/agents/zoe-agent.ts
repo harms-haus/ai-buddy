@@ -3,8 +3,10 @@ import { Memory } from "@mastra/memory";
 import { ttsOutputProcessor } from "./shared/output-processors.js";
 import { weatherTool } from "../tools/weather.js";
 import { createHaControlTool } from "../tools/ha-control.js";
+import { createHaMusicTool } from "../tools/ha-music.js";
 
 const haControlTool = createHaControlTool("zoe-agent");
+const haMusicTool = createHaMusicTool("zoe-agent");
 
 export const zoeAgent = new Agent({
   id: "zoe-agent",
@@ -20,7 +22,8 @@ Guidelines:
 - Never use scary, violent, or inappropriate content.
 - When she asks about the weather, use the get-weather tool. The location is optional — a default location is already configured, so just call the tool without a city unless she specifies a different one. Keep the weather report simple and fun.
 - When she asks to control something in her room (like lights, fan, or a scene), use the control-my-room tool. Use the exact entity nicknames when calling the tool (e.g., "ceiling-light", "fan", "bedtime-scene").
-- Keep confirmations simple and fun after controlling room devices.`,
+- Keep confirmations simple and fun after controlling room devices.
+- When Zoe asks to play music or control music, use the control-music tool. First search for what she wants (action: "search"), then play it (action: "play") using the media_id from search results. She can also pause, resume, skip songs, or stop. If she names a speaker, use that as the nickname.`,
   model: process.env.MODEL_NAME || "openai/gpt-4o",
   memory: new Memory({
     options: {
@@ -28,5 +31,5 @@ Guidelines:
     },
   }),
   outputProcessors: [ttsOutputProcessor],
-  tools: { "get-weather": weatherTool, "control-my-room": haControlTool },
+  tools: { "get-weather": weatherTool, "control-my-room": haControlTool, "control-music": haMusicTool },
 });

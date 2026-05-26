@@ -1,6 +1,6 @@
 # @harms-haus/ai-buddy
 
-A voice assistant for two young children — **Max** (4.5yo) and **Zoe** (6yo) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device.
+A voice assistant for two young children — **Max** (4.5yo) and **Zoe** (6yo) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device. The agent can answer questions, control smart home devices, check the weather, and play music.
 
 Three services work together to form a complete voice pipeline:
 
@@ -31,6 +31,7 @@ The agent exposes an OpenAI Chat Completions–compatible API (`/v1/chat/complet
 - **Python** 3.10+
 - **NVIDIA GPU** with CUDA 12 + cuDNN 9 (optional — CPU fallback available)
 - **OpenAI-compatible LLM** API key and endpoint
+- **Music Assistant** integration in Home Assistant (optional — needed for music control; without it, the music tool returns a friendly message)
 
 ### Install
 
@@ -153,7 +154,10 @@ ai-buddy/
 │   │   ├── agents/
 │   │   │   └── kids-agent.ts   # Agent definition + system prompt
 │   │   └── tools/
-│   │       └── weather.ts      # Weather tool (Open-Meteo API)
+│   │       ├── weather.ts          # Weather tool (Open-Meteo API)
+│   │       ├── ha-control.ts       # Smart home control tool (lights, etc.)
+│   │       ├── ha-music.ts         # Music control tool (Music Assistant)
+│   │       └── ha-music-config.ts  # Music Assistant config discovery & helpers
 │   └── .env.example
 ├── stt/                    # Speech-to-text (Python, Wyoming)
 │   ├── server.py               # Wyoming STT server
@@ -166,6 +170,19 @@ ai-buddy/
 │   └── HANDOFF.md              # Full project context
 └── dev.sh                  # Dev launcher (all services)
 ```
+
+## Features
+
+### Music Control
+
+The agent can control music playback through Home Assistant's **Music Assistant** integration:
+
+- **Search** for songs, artists, albums, and playlists by name
+- **Play** music on configured speakers (supports Spotify and other Music Assistant sources)
+- **Pause, resume, skip, go back, stop** playback
+- Each child's agent can have its own default speaker
+
+Music control requires the [Music Assistant](https://github.com/music-assistant/home-assistant) integration installed in Home Assistant. If it's not set up, the agent will politely let the kids know and suggest asking a grown-up for help.
 
 ## Hardware
 

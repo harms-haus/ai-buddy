@@ -4,10 +4,10 @@ import haEntitiesRaw from '../../../ha-entities.json';
 
 const entitySchema = z.object({
   entity_id: z.string().regex(
-    /^(light|switch|scene|input_boolean|fan)\.[a-zA-Z0-9_]+$/,
+    /^(light|switch|scene|input_boolean|fan|media_player)\.[a-zA-Z0-9_]+$/,
     'entity_id must be in domain.entity_id format (e.g., light.bedroom)'
   ),
-  type: z.enum(['light', 'switch', 'scene', 'input_boolean', 'fan']),
+  type: z.enum(['light', 'switch', 'scene', 'input_boolean', 'fan', 'media_player']),
   description: z.string().min(1),
   capabilities: z.array(z.enum(['brightness', 'color', 'color_temp'])).optional(),
 });
@@ -69,6 +69,7 @@ export function buildDynamicDescription(agentId: string): string {
   const scenes: string[] = [];
 
   for (const [nickname, entity] of Object.entries(agentConfig.entities)) {
+    if (entity.type === 'media_player') continue;
     const entry = `"${nickname}" (${entity.description})`;
     if (entity.type === 'scene') {
       scenes.push(entry);

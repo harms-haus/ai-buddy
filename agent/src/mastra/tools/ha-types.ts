@@ -1,7 +1,7 @@
 /** A single entity entry from ha-entities.json */
 export interface HaEntityConfig {
   entity_id: string;
-  type: "light" | "switch" | "scene" | "input_boolean" | "fan";
+  type: "light" | "switch" | "scene" | "input_boolean" | "fan" | "media_player";
   description: string;
   capabilities?: ("brightness" | "color" | "color_temp")[];
 }

@@ -23,6 +23,11 @@
         "entity_id": "scene.zoe_star_show",
         "type": "scene",
         "description": "the cool laser star show!"
+      },
+      "speaker": {
+        "entity_id": "media_player.zoe_speaker",
+        "type": "media_player",
+        "description": "the speaker that plays music"
       }
     }
   },
@@ -45,6 +50,11 @@
         "entity_id": "switch.max_white_noise",
         "type": "switch",
         "description": "the white noise machine"
+      },
+      "speaker": {
+        "entity_id": "media_player.max_speaker",
+        "type": "media_player",
+        "description": "the speaker that plays music"
       }
     }
   }
