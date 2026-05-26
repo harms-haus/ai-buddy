@@ -169,12 +169,10 @@ ai-buddy/
 
 ## Hardware
 
-- **Voice I/O**: Satellite1 (Wyoming satellite, ESPHome) — not yet connected
+- **Voice I/O**: Satellite1 (Wyoming satellite, ESPHome)
 - **GPU**: NVIDIA RTX 3060 (12GB VRAM) — STT ~1.5GB + TTS ~0.5GB ≈ 2GB total
 - **Latency target**: <800ms mouth-to-ear
 
 ## More Context
 
 - **Per-service docs**: [`agent/README.md`](agent/README.md), [`stt/README.md`](stt/README.md), [`tts/README.md`](tts/README.md)
-- **Full project handoff**: [`research/HANDOFF.md`](research/HANDOFF.md)
-- **Architecture decisions**: [`research/08-decisions.md`](research/08-decisions.md)
