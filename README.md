@@ -1,6 +1,6 @@
 # @harms-haus/ai-buddy
 
-A voice assistant for two young children — **Maxwell** (4.5, autistic) and **Zoe** (6) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device.
+A voice assistant for two young children — **Max** (4.5yo) and **Zoe** (6yo) — integrated with Home Assistant via Wyoming protocol and a Satellite1 hardware device.
 
 Three services work together to form a complete voice pipeline:
 
