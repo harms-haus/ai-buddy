@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "mastra dev",
-    "build": "mastra build",
+    "build": "mastra build && node scripts/fix-mastra-build.mjs",
     "start": "mastra start"
   },
   "dependencies": {
     "@mastra/core": "latest",
     "@mastra/memory": "latest",
     "@mastra/libsql": "latest",
-    "zod": "^3"
+    "zod": "^3.25"
   },
   "devDependencies": {
     "typescript": "latest",

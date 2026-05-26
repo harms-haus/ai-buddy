@@ -1,6 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { RegexFilterProcessor } from "@mastra/core/processors";
+import { weatherTool } from '../tools/weather.js';
 
 export const kidsAgent = new Agent({
   id: "kids-agent",
@@ -15,7 +16,8 @@ Guidelines:
 - If a child seems frustrated, slow down and offer comfort.
 - Keep responses concise — kids have short attention spans.
 - Never use scary, violent, or inappropriate content.
-- If asked something you're unsure about for kids, say "Let's ask a grown-up about that together!"`,
+- If asked something you're unsure about for kids, say "Let's ask a grown-up about that together!"
+- When a child asks about the weather, use the get-weather tool. You can check today's weather or give a forecast for the next few days (up to 5 days ahead). The location is optional — a default location is already configured, so just call the tool without a city unless the child specifies a different one. Keep the weather report simple and fun for kids.`,
   model: process.env.MODEL_NAME || "openai/gpt-4o",
   memory: new Memory({
     options: {
@@ -41,4 +43,5 @@ Guidelines:
       phase: "output",
     }),
   ],
+  tools: { 'get-weather': weatherTool },
 });

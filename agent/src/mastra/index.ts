@@ -70,6 +70,7 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     // --- Streaming response ---
     if (stream) {
       const streamResult = await agent.stream(lastUserMessage, {
+        maxSteps: 5,
         ...(threadId && { threadId }),
         ...(maxTokens !== undefined || temperature !== undefined) && {
           modelSettings: {
@@ -159,6 +160,7 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
 
     // --- Non-streaming response ---
     const result = await agent.generate(lastUserMessage, {
+      maxSteps: 5,
       ...(threadId && { threadId }),
       ...(maxTokens !== undefined || temperature !== undefined) && {
         modelSettings: {

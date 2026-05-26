@@ -78,6 +78,7 @@ python download_model.py        # ~1.5GB Whisper model
 | `OPENAI_BASE_URL` | — | Base URL for OpenAI-compatible endpoint |
 | `MODEL_NAME` | `openai/gpt-4o` | Model identifier |
 | `PORT` | `4111` | HTTP server port |
+| `WEATHER_LOCATION` | — | Default city name for weather tool (e.g., `Leander` or `Austin`) |
 
 ### TTS (`tts/.env`)
 
@@ -149,8 +150,10 @@ kids-agent/
 ├── agent/                  # Mastra agent (Node.js)
 │   ├── src/mastra/
 │   │   ├── index.ts            # Mastra entry + OpenAI-compatible routes
-│   │   └── agents/
-│   │       └── kids-agent.ts   # Agent definition + system prompt
+│   │   ├── agents/
+│   │   │   └── kids-agent.ts   # Agent definition + system prompt
+│   │   └── tools/
+│   │       └── weather.ts      # Weather tool (Open-Meteo API)
 │   └── .env.example
 ├── stt/                    # Speech-to-text (Python, Wyoming)
 │   ├── server.py               # Wyoming STT server
