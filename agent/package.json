@@ -10,13 +10,16 @@
   },
   "dependencies": {
     "@mastra/core": "latest",
-    "@mastra/memory": "latest",
     "@mastra/libsql": "latest",
+    "@mastra/memory": "latest",
+    "home-assistant-js-websocket": "^9.6.0",
+    "ws": "^8.21.0",
     "zod": "^3.25"
   },
   "devDependencies": {
-    "typescript": "latest",
     "@types/node": "latest",
-    "mastra": "latest"
+    "@types/ws": "^8.18.1",
+    "mastra": "latest",
+    "typescript": "latest"
   }
 }

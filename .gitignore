@@ -22,3 +22,6 @@ venv/
 research/
 .dev-logs/
 .dev-pids
+
+# Home Assistant entity config (per-deployment)
+agent/ha-entities.json

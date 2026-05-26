@@ -99,3 +99,63 @@ curl http://localhost:4111/v1/models
 | OPENAI_BASE_URL | - | Custom base URL for OpenAI-compatible API |
 | MODEL_NAME | openai/gpt-4o | Model identifier |
 | PORT | 4111 | Server port |
+| HA_URL | - | Home Assistant WebSocket URL |
+| HA_TOKEN | - | Home Assistant Long-Lived Access Token |
+
+## Room Control
+
+The agent can control Home Assistant entities in children's rooms (lights, fans, scenes, etc.). Each child's agent has its own set of allowed entities with kid-friendly nicknames.
+
+### Setup
+
+1. Set `HA_URL` and `HA_TOKEN` in your `.env` file
+   - `HA_URL`: Your Home Assistant URL (e.g., `http://homeassistant.local:8123`)
+   - `HA_TOKEN`: A Long-Lived Access Token from HA (Profile → Security → Create Token)
+
+2. Copy `ha-entities.example.json` to `ha-entities.json` and configure your entities:
+   ```bash
+   cp ha-entities.example.json ha-entities.json
+   ```
+
+3. Edit `ha-entities.json` with your actual entity IDs and nicknames
+
+### Entity Configuration
+
+Each agent has a list of allowed entities with nicknames. The tool description dynamically lists available entities for the LLM. Example:
+
+```json
+{
+  "zoe-agent": {
+    "displayName": "Zoe",
+    "entities": {
+      "ceiling-light": {
+        "entity_id": "light.zoe_bedroom_ceiling",
+        "type": "light",
+        "description": "the big light on the ceiling",
+        "capabilities": ["brightness"]
+      },
+      "star-show": {
+        "entity_id": "scene.zoe_star_show",
+        "type": "scene",
+        "description": "the cool laser star show!"
+      }
+    }
+  }
+}
+```
+
+### Agents
+
+| Agent ID | Model Name | Description |
+|----------|-----------|-------------|
+| `kids-agent` | `kids-agent` or `learning-buddy` | Generic kids agent |
+| `zoe-agent` | `zoe-agent` or `zoe` | Zoe's personal agent |
+| `max-agent` | `max-agent` or `max` | Max's personal agent |
+
+### Example
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "zoe-agent", "stream": true, "messages": [{"role": "user", "content": "Turn on my star show!"]}'
+```

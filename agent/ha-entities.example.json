@@ -1,0 +1,51 @@
+{
+  "zoe-agent": {
+    "displayName": "Zoe",
+    "entities": {
+      "ceiling-light": {
+        "entity_id": "light.zoe_bedroom_ceiling",
+        "type": "light",
+        "description": "the big light on the ceiling",
+        "capabilities": ["brightness"]
+      },
+      "bedroom-lamp": {
+        "entity_id": "light.zoe_bedroom_lamp",
+        "type": "light",
+        "description": "the small lamp by the bed",
+        "capabilities": ["brightness", "color"]
+      },
+      "fan": {
+        "entity_id": "switch.zoe_fan",
+        "type": "switch",
+        "description": "the fan that keeps you cool"
+      },
+      "star-show": {
+        "entity_id": "scene.zoe_star_show",
+        "type": "scene",
+        "description": "the cool laser star show!"
+      }
+    }
+  },
+  "max-agent": {
+    "displayName": "Max",
+    "entities": {
+      "ceiling-light": {
+        "entity_id": "light.max_bedroom_ceiling",
+        "type": "light",
+        "description": "the big light on the ceiling",
+        "capabilities": ["brightness"]
+      },
+      "night-light": {
+        "entity_id": "light.max_night_light",
+        "type": "light",
+        "description": "the soft night light",
+        "capabilities": ["color"]
+      },
+      "white-noise": {
+        "entity_id": "switch.max_white_noise",
+        "type": "switch",
+        "description": "the white noise machine"
+      }
+    }
+  }
+}

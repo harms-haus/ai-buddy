@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
 
 import { kidsAgent } from './agents/kids-agent.js';
+import { zoeAgent } from './agents/zoe-agent.js';
+import { maxAgent } from './agents/maxwell-agent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.resolve(__dirname, '../../data/mastra.db');
@@ -14,6 +16,10 @@ const dbPath = path.resolve(__dirname, '../../data/mastra.db');
 const AGENT_MAP: Record<string, string> = {
   'kids-agent': 'kidsAgent',
   'learning-buddy': 'kidsAgent',
+  'zoe-agent': 'zoeAgent',
+  'zoe': 'zoeAgent',
+  'max-agent': 'maxAgent',
+  'max': 'maxAgent',
 };
 
 /**
@@ -220,7 +226,7 @@ const modelsRoute = registerApiRoute('/v1/models', {
 });
 
 export const mastra = new Mastra({
-  agents: { kidsAgent },
+  agents: { kidsAgent, zoeAgent, maxAgent },
   storage: new LibSQLStore({
     id: 'kids-agent-storage',
     url: `file:${dbPath}`,
