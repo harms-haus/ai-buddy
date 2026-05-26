@@ -1,12 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import type { HaEntitiesConfig, HaAgentConfig, HaEntityConfig } from './ha-types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const CONFIG_PATH = resolve(__dirname, '../../../ha-entities.json');
+import haEntitiesRaw from '../../../ha-entities.json';
 
 const entitySchema = z.object({
   entity_id: z.string().regex(
@@ -28,20 +22,15 @@ const configSchema = z.record(z.string(), agentSchema);
 let config: HaEntitiesConfig;
 
 try {
-  const raw = readFileSync(CONFIG_PATH, 'utf-8');
-  const parsed = JSON.parse(raw);
-  const validated = configSchema.parse(parsed);
+  const validated = configSchema.parse(haEntitiesRaw);
   config = validated as HaEntitiesConfig;
   console.log(`[ha-config] loaded config for agents: ${Object.keys(config).join(', ')}`);
 } catch (err: any) {
-  if (err.code === 'ENOENT') {
-    console.warn('[ha-config] ha-entities.json not found — room control will be unavailable');
-    config = {};
-  } else if (err instanceof z.ZodError) {
+  if (err instanceof z.ZodError) {
     console.error('[ha-config] ha-entities.json validation failed:', err.errors);
     throw new Error(`Invalid ha-entities.json: ${err.errors.map((e: any) => e.message).join(', ')}`);
   } else {
-    console.error('[ha-config] failed to load ha-entities.json:', err.message);
+    console.error('[ha-config] failed to validate ha-entities.json:', err.message);
     config = {};
   }
 }
