@@ -433,20 +433,29 @@ class TtsEventHandler(AsyncEventHandler):
                     AudioStart(rate=rate, width=width, channels=channels).event()
                 )
 
-                total_bytes = 0
+                # Collect all PCM chunks into a single buffer, then send
+                # as one AudioChunk + AudioStop. HA's voice pipeline expects
+                # a single audio segment — streaming multiple chunks causes it
+                # to transition to STT (listen mode) before playback finishes.
+                pcm_chunks: list[bytes] = []
                 async for pcm_chunk in self._backend.synthesize(
                     text, voice=voice, speed=speed
                 ):
-                    await self.write_event(AudioChunk(
-                        audio=pcm_chunk, width=width, channels=channels, rate=rate
-                    ).event())
-                    total_bytes += len(pcm_chunk)
+                    pcm_chunks.append(pcm_chunk)
+
+                pcm_all = b''.join(pcm_chunks)
+                total_bytes = len(pcm_all)
+                audio_duration = total_bytes / (rate * width * channels)
+
+                # Send the complete audio as a single chunk
+                await self.write_event(AudioChunk(
+                    audio=pcm_all, width=width, channels=channels, rate=rate
+                ).event())
 
                 # Send AudioStop
                 await self.write_event(AudioStop().event())
 
                 elapsed = time.perf_counter() - t_start
-                audio_duration = total_bytes / (rate * width * channels)
                 print(f"[TTS] synthesis complete | elapsed={elapsed:.2f}s | audio={audio_duration:.1f}s | chars={len(text)} | text={text!r}")
 
             except Exception as err:
@@ -490,7 +499,7 @@ async def main():
 
     try:
         await server.run(partial(
-            TtsEventHandler, info_event, backend, default_voice, default_speed
+            TtsEventHandler, info_event, backend, default_voice, default_speed,
         ))
     finally:
         if zeroconf:
