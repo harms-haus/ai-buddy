@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
-import { RegexFilterProcessor } from "@mastra/core/processors";
+import { ttsOutputProcessor } from "./shared/output-processors.js";
 import { weatherTool } from '../tools/weather.js';
 import { createHaControlTool } from '../tools/ha-control.js';
 
@@ -28,24 +28,6 @@ Guidelines:
       lastMessages: 20,
     },
   }),
-  outputProcessors: [
-    new RegexFilterProcessor({
-      rules: [
-        {
-          name: "emoji",
-          // Strip emoji because TTS can't render them and responses are read aloud.
-          // \p{Emoji_Presentation} — default emoji presentation (😀🎉)
-          // \p{Extended_Pictographic} — extended pictographs (✨⭐)
-          // \u200D — ZWJ for compound sequences (👨‍👩‍👧)
-          // \uFE0F — VS-16 forcing emoji presentation
-          // \u{E0020}-\u{E007F} — tag chars for subdivision flags (e.g. 🏴󠁧󠁢󠁳󠁣󠁴󠁿)
-          pattern: /[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200D\uFE0F\u{E0020}-\u{E007F}]/gu,
-          replacement: "",
-        },
-      ],
-      strategy: "redact",
-      phase: "output",
-    }),
-  ],
+  outputProcessors: [ttsOutputProcessor],
   tools: { 'get-weather': weatherTool, 'control-my-room': haControlTool },
 });
