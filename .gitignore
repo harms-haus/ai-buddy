@@ -13,6 +13,9 @@ models/
 # !voices*.bin  # downloaded by download_model.py, not tracked
 *.wav
 !tests/fixtures/*.wav
+# TTS model assets
+tts/asset/
+tts/voices/
 .DS_Store
 venv/
 .venv/

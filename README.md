@@ -7,7 +7,7 @@ Three services work together to form a complete voice pipeline:
 | Service | Tech | Port | Protocol |
 |---------|------|------|----------|
 | **Agent** | Mastra (Node.js) | 4111 | HTTP — OpenAI-compatible API |
-| **TTS** | Kokoro-ONNX (Python) | 10201 | Wyoming TCP |
+| **TTS** | Multi-backend (Python) | 10201 | Wyoming TCP |
 | **STT** | faster-whisper (Python) | 10200 | Wyoming TCP |
 
 ## Architecture
@@ -17,7 +17,7 @@ Satellite1 (wake word)
   → HA Voice Pipeline
     → STT (Wyoming :10200) — faster-whisper on GPU
     → Agent (:4111) — Mastra via Extended OpenAI Conversation
-    → TTS (Wyoming :10201) — Kokoro on GPU
+    → TTS (Wyoming :10201) — multi-backend (Kokoro, Chatterbox, Dia, ChatTTS)
   → Satellite1 speaker
 ```
 
@@ -46,6 +46,9 @@ cd ../tts
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python download_model.py        # ~324MB ONNX model + voices
+# Choose your TTS backend:
+# kokoro (default), chatterbox, dia, or chattts
+# See tts/README.md for backend-specific setup
 
 # STT
 cd ../stt
@@ -57,8 +60,10 @@ python download_model.py        # ~1.5GB Whisper model
 ### Run
 
 ```bash
-./dev.sh          # starts all 3 services with color-coded logs
-./dev.sh --stop   # stop all services
+./dev.sh                        # starts all 3 services (Kokoro TTS default)
+./dev.sh --tts=chatterbox       # start with Chatterbox TTS
+./dev.sh --tts=dia              # start with Dia TTS
+./dev.sh --stop                 # stop all services
 ```
 
 `dev.sh` builds and starts the agent, TTS, and STT, then waits for each port to become ready. Press **Ctrl+C** to stop everything.
@@ -72,14 +77,14 @@ python download_model.py        # ~1.5GB Whisper model
 | `OPENAI_API_KEY` | — | API key for your LLM provider |
 | `OPENAI_BASE_URL` | — | Base URL for OpenAI-compatible endpoint |
 | `MODEL_NAME` | `openai/gpt-4o` | Model identifier |
-| `MASTRA_PORT` | `4111` | HTTP server port |
+| `PORT` | `4111` | HTTP server port |
 
 ### TTS (`tts/.env`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TTS_PORT` | `10201` | Wyoming TCP port |
-| `TTS_HOST` | `0.0.0.0` | Listen address |
+| `TTS_HOST` | `127.0.0.1` | Listen address |
 | `KOKORO_VOICE` | `af_heart` | Default voice (54 available) |
 | `KOKORO_SPEED` | `1.0` | Speech speed (0.5–2.0) |
 | `KOKORO_MODEL_PATH` | `kokoro-v1.0.onnx` | Path to ONNX model |
@@ -101,7 +106,7 @@ Start the STT service (`python stt/server.py`). Home Assistant should auto-disco
 
 ### 2. Wyoming TTS
 
-Start the TTS service (`python tts/server.py`). Same discovery flow — service name is `kids-agent-tts`. Add manually if needed.
+Start the TTS service (`python tts/server.py`). Same discovery flow — service name is `kids-agent-tts-{backend}` (e.g. `kids-agent-tts-kokoro`). Add manually if needed.
 
 ### 3. Extended OpenAI Conversation (Agent)
 

@@ -2,8 +2,11 @@
 # ──────────────────────────────────────────────────────────
 #  Kids Agent Dev Launcher
 #  Starts all 3 services with color-coded, prefixed logs.
-#  Usage:  ./dev.sh          (start/restart)
-#          ./dev.sh --stop   (kill only, don't restart)
+#  Usage:  ./dev.sh                    (start all services, kokoro TTS)
+#          ./dev.sh --tts=chatterbox   (start with Chatterbox TTS backend)
+#          ./dev.sh --tts=dia          (start with Dia TTS backend)
+#          ./dev.sh --tts=chattts      (start with ChatTTS backend)
+#          ./dev.sh --stop             (stop all services)
 # ──────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -25,6 +28,7 @@ RESET=$'\033[0m'
 AGENT_PORT=4111
 TTS_PORT=10201
 STT_PORT=10200
+TTS_BACKEND="kokoro"  # default TTS backend, overridden by --tts= flag
 
 AGENT_COLOR="$CYAN"
 TTS_COLOR="$GREEN"
@@ -105,6 +109,25 @@ kill_port "$TTS_PORT"   "tts"
 kill_port "$STT_PORT"   "stt"
 sleep 0.5
 
+# ── Parse flags ──────────────────────────────────────────
+for arg in "$@"; do
+    case "$arg" in
+        --tts=*)
+            TTS_BACKEND="${arg#--tts=}"
+            ;;
+    esac
+done
+
+# Validate TTS backend
+case "$TTS_BACKEND" in
+    kokoro|chatterbox|dia|chattts) ;;
+    *)
+        echo -e "${RED}Unknown TTS backend: '$TTS_BACKEND'${RESET}"
+        echo -e "${RED}Valid options: kokoro, chatterbox, dia, chattts${RESET}"
+        exit 1
+        ;;
+esac
+
 # ── Handle --stop flag ───────────────────────────────────
 if [[ "${1:-}" == "--stop" ]]; then
     log_ok "Stopped all services (--stop)"
@@ -152,10 +175,13 @@ prefix_pipe "$AGENT_COLOR" "agent" "$LOG_DIR/agent.pipe" &
 # ══════════════════════════════════════════════════════════
 #  3. START TTS (Kokoro)
 # ══════════════════════════════════════════════════════════
-log "Starting TTS on :$TTS_PORT..."
+log "Starting TTS ($TTS_BACKEND) on :$TTS_PORT..."
 (
     cd "$ROOT/tts"
     source venv/bin/activate
+    export TTS_BACKEND="$TTS_BACKEND"
+    # Reduce CUDA memory fragmentation for large models
+    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/tts.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
@@ -168,6 +194,11 @@ log "Starting STT on :$STT_PORT..."
 (
     cd "$ROOT/stt"
     source venv/bin/activate
+    # Add nvidia cublas libs to library path for ctranslate2 CUDA support
+    CUBLAS_DIR="$ROOT/stt/venv/lib/python3.14/site-packages/nvidia/cublas/lib"
+    if [[ -d "$CUBLAS_DIR" ]]; then
+        export LD_LIBRARY_PATH="$CUBLAS_DIR:${LD_LIBRARY_PATH:-}"
+    fi
     PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/stt.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
@@ -212,7 +243,7 @@ else
 fi
 echo ""
 printf "  ${DIM}Agent${RESET}  http://localhost:${AGENT_PORT}  ${AGENT_COLOR}●${RESET}\n"
-printf "  ${DIM}TTS${RESET}    http://localhost:${TTS_PORT}    ${GREEN}●${RESET}\n"
+printf "  ${DIM}TTS${RESET}    http://localhost:${TTS_PORT}    ${GREEN}●${RESET}  (${TTS_BACKEND})\n"
 printf "  ${DIM}STT${RESET}    http://localhost:${STT_PORT}    ${MAGENTA}●${RESET}\n"
 echo ""
 printf "  ${DIM}Press Ctrl+C to stop all services${RESET}\n"

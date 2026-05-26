@@ -1,6 +1,24 @@
-kokoro-onnx>=0.4.0
+# ── Core (required for all backends) ──
 numpy>=1.24.0
 python-dotenv>=1.0.0
 requests>=2.28.0
 zeroconf>=0.130
 wyoming>=1.8
+
+# ── Kokoro Backend (default, always installed) ──
+kokoro-onnx>=0.4.0
+
+# ── Chatterbox Backend ──
+# To use Chatterbox TTS, install:
+# pip install chatterbox-tts
+# (automatically installs torch, torchaudio, transformers, etc.)
+
+# ── Dia Backend ──
+# To use Dia TTS, install:
+# pip install git+https://github.com/nari-labs/dia.git
+# (automatically installs torch, torchaudio, descript-audio-codec, etc.)
+
+# ── ChatTTS Backend ──
+# To use ChatTTS, install:
+# pip install ChatTTS
+# (automatically installs torch, torchaudio, vocos, transformers, etc.)

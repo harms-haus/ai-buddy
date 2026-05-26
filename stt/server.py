@@ -10,11 +10,7 @@ from functools import partial
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    HAS_TORCH = False
+import ctranslate2
 
 from wyoming.server import AsyncServer, AsyncEventHandler
 from wyoming.asr import Transcribe, Transcript
@@ -32,11 +28,35 @@ except ImportError:
 # GPU auto-detection
 # ---------------------------------------------------------------------------
 
+def _get_free_gpu_memory_mib():
+    """Return free GPU memory in MiB using nvidia-smi, or 0 on failure."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return int(result.stdout.strip().split("\n")[0])
+    except Exception:
+        return 0
+
+
 def get_device_and_compute():
-    """Auto-detect GPU and return (device, compute_type)."""
-    if HAS_TORCH and torch.cuda.is_available():
-        print(f"[STT] CUDA available: {torch.cuda.get_device_name(0)}")
-        return "cuda", "float16"
+    """Auto-detect GPU and return (device, compute_type).
+
+    Uses CUDA when available AND there is enough free GPU memory.
+    Falls back to CPU/int8 when GPU memory is scarce (e.g., shared
+    with a large TTS model). CPU/int8 is still fast enough for real-time.
+    """
+    if ctranslate2.get_cuda_device_count() > 0:
+        free_mib = _get_free_gpu_memory_mib()
+        free_gib = free_mib / 1024
+        # Whisper medium.en needs ~2 GiB; require 3 GiB free for headroom
+        if free_gib >= 3.0:
+            print(f"[STT] CUDA available ({free_gib:.1f} GiB free, {ctranslate2.get_cuda_device_count()} device(s))")
+            return "cuda", "float16"
+        else:
+            print(f"[STT] GPU detected but only {free_gib:.1f} GiB free — using CPU to save GPU memory for TTS")
     print("[STT] CUDA not available, using CPU")
     return "cpu", "int8"
 

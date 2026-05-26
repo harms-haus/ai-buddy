@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """TTS Wyoming server test."""
 
+# Usage: TTS_BACKEND=chatterbox python tests/test_tts.py
+# (Server must be running with matching backend: ./dev.sh --tts=chatterbox)
+
 import asyncio
+import os
 import sys
 
 from wyoming.client import AsyncClient
@@ -9,6 +13,7 @@ from wyoming.tts import Synthesize
 from wyoming.audio import AudioStart, AudioChunk, AudioStop
 from wyoming.info import Describe, Info
 
+TTS_BACKEND = os.getenv("TTS_BACKEND", "kokoro")
 TTS_URI = "tcp://localhost:10201"
 
 
@@ -26,7 +31,19 @@ async def test_describe():
     voices = [v.name for p in info.tts for v in p.voices]
     print(f"  ✓ TTS programs: {[p.name for p in info.tts]}")
     print(f"  ✓ Voices ({len(voices)}): {voices[:5]}...")
+
+    expected_names = {
+        "kokoro": "kokoro",
+        "chatterbox": "chatterbox",
+        "dia": "dia",
+        "chattts": "chattts",
+    }
+    expected = expected_names.get(TTS_BACKEND, TTS_BACKEND)
+    assert info.tts[0].name == expected, f"Expected backend '{expected}', got '{info.tts[0].name}'"
+    print(f"  ✓ Backend: {info.tts[0].name}")
+
     await client.disconnect()
+    return info
 
 
 async def test_synthesize():
@@ -67,7 +84,7 @@ async def test_synthesize():
 
     # Save to WAV for manual verification
     import wave
-    output_path = "tests/output_tts.wav"
+    output_path = f"tests/output_tts_{TTS_BACKEND}.wav"
     with wave.open(output_path, "wb") as wf:
         wf.setframerate(rate)
         wf.setsampwidth(width)
@@ -78,10 +95,27 @@ async def test_synthesize():
     await client.disconnect()
 
 
+async def test_voices_available(info):
+    """Test that voices list is non-empty."""
+    voices = info.tts[0].voices
+    assert len(voices) > 0, "No voices available"
+    print(f"  ✓ Voices: {len(voices)} available ({voices[0].name}, ...)")
+
+    # Backend-specific checks
+    if TTS_BACKEND == "kokoro":
+        voice_names = [v.name for v in voices]
+        assert "af_heart" in voice_names, "Expected 'af_heart' in Kokoro voices"
+    elif TTS_BACKEND == "chattts":
+        voice_names = [v.name for v in voices]
+        assert "random" in voice_names, "Expected 'random' in ChatTTS voices"
+
+
 async def main():
-    print("=== TTS Wyoming Server Tests ===\n")
+    print(f"=== TTS Wyoming Server Tests (backend: {TTS_BACKEND}) ===\n")
     try:
-        await test_describe()
+        info = await test_describe()
+        print()
+        await test_voices_available(info)
         print()
         await test_synthesize()
         print("\n✅ All TTS tests passed!")
