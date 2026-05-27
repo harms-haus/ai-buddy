@@ -483,16 +483,27 @@ async def main():
     voices = backend.get_voices()
 
     # Report CUDA status (mirrors STT startup banner)
+    _cuda_found = False
     try:
         import torch
         if torch.cuda.is_available():
             _dev_name = torch.cuda.get_device_name(0)
             _free_mib = torch.cuda.mem_get_info()[0] / (1024 ** 2)
-            print(f"[TTS] CUDA available ({_dev_name}, {_free_mib:.0f} MiB free)")
-        else:
-            print("[TTS] CUDA not available, using CPU")
+            print(f"[TTS] CUDA available ({_dev_name}, {_free_mib:.0f} MiB free) [PyTorch]")
+            _cuda_found = True
     except ImportError:
-        print("[TTS] PyTorch not installed, using CPU")
+        pass
+    if not _cuda_found:
+        try:
+            import onnxruntime as _ort
+            _providers = _ort.get_available_providers()
+            if "CUDAExecutionProvider" in _providers:
+                print(f"[TTS] CUDA available (ONNX Runtime, providers: {_providers})")
+                _cuda_found = True
+        except ImportError:
+            pass
+    if not _cuda_found:
+        print("[TTS] CUDA not available, using CPU")
 
     print(f"{backend_name} backend loaded. Voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}")
 

@@ -47,6 +47,10 @@ log()    { printf "${SYS_COLOR}${BOLD}[dev]${RESET} %s\n" "$*"; }
 log_ok() { printf "${SYS_COLOR}${BOLD}[dev]${RESET} ${GREEN}✓${RESET} %s\n" "$*"; }
 log_err(){ printf "${RED}${BOLD}[dev] ✗${RESET} %s\n" "$*" >&2; }
 
+has_cuda() {
+    command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null
+}
+
 check_port() {
     local port=$1
     if command -v ss &>/dev/null; then
@@ -159,10 +163,27 @@ if [[ ! -f "$ROOT/tts/venv/bin/activate" ]]; then
     source "$ROOT/tts/venv/bin/activate"
     pip install --upgrade pip
     pip install -r "$ROOT/tts/requirements.txt"
+    # Kokoro uses ONNX Runtime — install GPU variant when CUDA is present
+    if has_cuda; then
+        log "CUDA detected — installing onnxruntime-gpu for TTS..."
+        pip uninstall -y onnxruntime 2>/dev/null || true
+        pip install onnxruntime-gpu
+        log_ok "onnxruntime-gpu installed"
+    fi
     deactivate
     log_ok "TTS venv created and dependencies installed"
 else
     log_ok "TTS venv exists"
+    # Ensure onnxruntime-gpu is present when CUDA is available
+    source "$ROOT/tts/venv/bin/activate"
+    _has_gpu_rt="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("onnxruntime-gpu") is not None)' 2>/dev/null || echo False)"
+    if has_cuda && [[ "$_has_gpu_rt" == "False" ]]; then
+        log "CUDA detected but onnxruntime-gpu not installed — upgrading..."
+        pip uninstall -y onnxruntime 2>/dev/null || true
+        pip install onnxruntime-gpu
+        log_ok "onnxruntime-gpu installed"
+    fi
+    deactivate
 fi
 
 # ── Check / setup STT virtual environment ─────────────────
