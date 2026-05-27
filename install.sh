@@ -311,6 +311,14 @@ log_ok "Log directory: $LOG_DIR"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 
 log "Creating systemd service..."
+
+# Only add nvm dir to ReadWritePaths if it exists
+NVM_RW_PATH=""
+_nvm_home="$(eval echo "~$SERVICE_USER")/.nvm"
+if [[ -d "$_nvm_home" ]]; then
+    NVM_RW_PATH="$_nvm_home"
+fi
+
 cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=AI Buddy (Agent + TTS + STT)
@@ -336,7 +344,7 @@ Environment=HOME=$(eval echo "~$SERVICE_USER")
 
 # Hardening
 ProtectSystem=strict
-ReadWritePaths=$ROOT $LOG_DIR $(eval echo "~$SERVICE_USER")/.nvm
+ReadWritePaths=$ROOT $LOG_DIR${NVM_RW_PATH:+ $NVM_RW_PATH}
 PrivateTmp=true
 NoNewPrivileges=false
 
