@@ -288,6 +288,11 @@ log "Starting TTS ($TTS_BACKEND) on :$TTS_PORT..."
     export TTS_BACKEND="$TTS_BACKEND"
     # Reduce CUDA memory fragmentation for large models
     export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    # kokoro-onnx defaults to CPU even with onnxruntime-gpu installed;
+    # explicitly request CUDA via its ONNX_PROVIDER env var
+    if has_cuda; then
+        export ONNX_PROVIDER=CUDAExecutionProvider
+    fi
     PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/tts.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
