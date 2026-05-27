@@ -210,8 +210,10 @@ log "Building agent..."
         source "$_nvm_dir/nvm.sh"
     fi
     export PATH="$ROOT/agent/node_modules/.bin:$PATH"
-    npm install --omit=dev 2>&1
+    npm install 2>&1
     npm run build 2>&1
+    # Prune dev dependencies after build to save space
+    npm prune --omit=dev 2>&1 || true
 )
 log_ok "Agent built"
 
