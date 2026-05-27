@@ -194,10 +194,25 @@ if [[ ! -f "$ROOT/stt/venv/bin/activate" ]]; then
     source "$ROOT/stt/venv/bin/activate"
     pip install --upgrade pip
     pip install -r "$ROOT/stt/requirements.txt"
+    # ctranslate2 needs nvidia-cublas-cu12 for CUDA but doesn't always pull it in
+    if has_cuda; then
+        log "CUDA detected — installing nvidia-cublas-cu12 for STT..."
+        pip install nvidia-cublas-cu12
+        log_ok "nvidia-cublas-cu12 installed"
+    fi
     deactivate
     log_ok "STT venv created and dependencies installed"
 else
     log_ok "STT venv exists"
+    # Ensure nvidia-cublas-cu12 is present when CUDA is available
+    source "$ROOT/stt/venv/bin/activate"
+    _has_cublas="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("nvidia.cublas") is not None)' 2>/dev/null || echo False)"
+    if has_cuda && [[ "$_has_cublas" == "False" ]]; then
+        log "CUDA detected but nvidia-cublas-cu12 not installed — installing..."
+        pip install nvidia-cublas-cu12
+        log_ok "nvidia-cublas-cu12 installed"
+    fi
+    deactivate
 fi
 
 # ── Parse flags ──────────────────────────────────────────
@@ -287,10 +302,12 @@ log "Starting STT on :$STT_PORT..."
     source venv/bin/activate
     # Add nvidia cublas libs to library path for ctranslate2 CUDA support
     _pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
-    CUBLAS_DIR="$ROOT/stt/venv/lib/$_pyver/site-packages/nvidia/cublas/lib"
-    if [[ -d "$CUBLAS_DIR" ]]; then
-        export LD_LIBRARY_PATH="$CUBLAS_DIR:${LD_LIBRARY_PATH:-}"
-    fi
+    _site="$ROOT/stt/venv/lib/$_pyver/site-packages"
+    for _dir in "$_site/nvidia/cublas/lib" "$_site/nvidia/cublas_cu12/lib"; do
+        if [[ -d "$_dir" ]]; then
+            export LD_LIBRARY_PATH="$_dir:${LD_LIBRARY_PATH:-}"
+        fi
+    done
     PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/stt.pipe" 2>&1 &
 echo $! >> "$PIDS_FILE"
