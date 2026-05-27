@@ -212,7 +212,7 @@ log "Building agent..."
     export PATH="$ROOT/agent/node_modules/.bin:$PATH"
     npm install 2>&1
     npm run build 2>&1
-    # Prune dev dependencies after build to save space
+    # Prune dev dependencies after build (runtime uses .mastra/output bundle, not mastra CLI)
     npm prune --omit=dev 2>&1 || true
 )
 log_ok "Agent built"
@@ -235,7 +235,6 @@ PYTHON_BIN="$PYTHON_BIN"
 # Source nvm if available
 _nvm_dir="$(eval echo "~$SERVICE_USER")/.nvm"
 [[ -f "\$_nvm_dir/nvm.sh" ]] && source "\$_nvm_dir/nvm.sh"
-export PATH="\$ROOT/agent/node_modules/.bin:\$PATH"
 
 PIDS=()
 
@@ -286,7 +285,7 @@ PIDS+=(\$!)
 echo "[ai-buddy] Starting Agent..."
 (
     cd "\$ROOT/agent"
-    npm run start 2>&1
+    node .mastra/output/index.mjs 2>&1
 ) >> "$LOG_DIR/agent.log" 2>&1 &
 PIDS+=(\$!)
 
