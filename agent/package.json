@@ -12,7 +12,10 @@
     "@mastra/core": "latest",
     "@mastra/libsql": "latest",
     "@mastra/memory": "latest",
+    "@mozilla/readability": "^0.6.0",
     "home-assistant-js-websocket": "^9.6.0",
+    "linkedom": "^0.18",
+    "node-html-markdown": "^2.0.0",
     "ws": "^8.21.0",
     "zod": "^3.25"
   },

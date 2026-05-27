@@ -32,6 +32,7 @@ The agent exposes an OpenAI Chat Completions–compatible API (`/v1/chat/complet
 - **NVIDIA GPU** with CUDA 12 + cuDNN 9 (optional — CPU fallback available)
 - **OpenAI-compatible LLM** API key and endpoint
 - **Music Assistant** integration in Home Assistant (optional — needed for music control; without it, the music tool returns a friendly message)
+- **SearXNG** (optional — self-hosted search engine for web search capability)
 
 ### Install
 
@@ -80,6 +81,8 @@ python download_model.py        # ~1.5GB Whisper model
 | `MODEL_NAME` | `openai/gpt-4o` | Model identifier |
 | `PORT` | `4111` | HTTP server port |
 | `WEATHER_LOCATION` | — | Default city name for weather tool (e.g., `Leander` or `Austin`) |
+| `SEARCH_API_URL` | — | URL of your SearXNG instance (e.g., `http://localhost:8080`). Required for web search |
+| `WEB_FETCH_CACHE_TTL` | `600000` | Cache TTL for fetched web pages in milliseconds |
 
 ### TTS (`tts/.env`)
 
@@ -157,7 +160,9 @@ ai-buddy/
 │   │       ├── weather.ts          # Weather tool (Open-Meteo API)
 │   │       ├── ha-control.ts       # Smart home control tool (lights, etc.)
 │   │       ├── ha-music.ts         # Music control tool (Music Assistant)
-│   │       └── ha-music-config.ts  # Music Assistant config discovery & helpers
+│   │       ├── ha-music-config.ts  # Music Assistant config discovery & helpers
+│   │       ├── web-search.ts       # Web search tool (SearXNG)
+│   │       └── web-fetch.ts        # Web page fetcher with content extraction
 │   └── .env.example
 ├── stt/                    # Speech-to-text (Python, Wyoming)
 │   ├── server.py               # Wyoming STT server
@@ -183,6 +188,15 @@ The agent can control music playback through Home Assistant's **Music Assistant*
 - Each child's agent can have its own default speaker
 
 Music control requires the [Music Assistant](https://github.com/music-assistant/home-assistant) integration installed in Home Assistant. If it's not set up, the agent will politely let the kids know and suggest asking a grown-up for help.
+
+### Web Search & Fetch
+
+The agent can search the web and read web pages using a self-hosted **SearXNG** instance:
+
+- **Search** the web for facts, current events, or topics the assistant doesn't know about
+- **Fetch and read** web page content, extracting readable article text with pagination for long pages
+- Both tools degrade gracefully with kid-friendly messages when SearXNG is unconfigured or requests fail
+- Uses `@mozilla/readability`, `linkedom`, and `node-html-markdown` for HTML-to-text extraction
 
 ## Hardware
 

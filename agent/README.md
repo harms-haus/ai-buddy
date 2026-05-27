@@ -12,7 +12,9 @@ AI voice buddy for kids, built with Mastra framework.
 2. Copy `.env.example` to `.env` and configure:
    ```bash
    cp .env.example .env
-   # Edit .env with your API key and base URL
+   # Edit .env — set OPENAI_API_KEY, OPENAI_BASE_URL, and optional
+   # variables like SEARCH_API_URL (for web search) and HA_URL/HA_TOKEN
+   # (for room control and music)
    ```
 
 3. Start the dev server:
@@ -101,6 +103,9 @@ curl http://localhost:4111/v1/models
 | PORT | 4111 | Server port |
 | HA_URL | - | Home Assistant WebSocket URL |
 | HA_TOKEN | - | Home Assistant Long-Lived Access Token |
+| WEATHER_LOCATION | - | Default city for weather lookups (e.g. `Austin` or `Katy,Tx,US`) |
+| SEARCH_API_URL | - | URL of your SearXNG instance (e.g. `http://localhost:8080`). Required for web search. |
+| WEB_FETCH_CACHE_TTL | `600000` | Cache TTL for fetched web pages in milliseconds |
 
 ## Room Control
 
@@ -228,5 +233,78 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   -d '{
     "model": "zoe-agent",
     "messages": [{"role": "user", "content": "play Let It Go"}]
+  }'
+```
+
+## Web Search & Web Fetch
+
+The agent can search the web and read web pages using two tools: **web-search** queries a SearXNG instance for results, and **web-fetch** retrieves and extracts the text content of a URL. The LLM uses these together — searching first, then fetching promising links to answer a question in detail.
+
+These tools depend on three npm packages: `@mozilla/readability`, `linkedom`, and `node-html-markdown`. They are installed automatically with `npm install`.
+
+### SearXNG Setup
+
+Web search requires a [SearXNG](https://github.com/searxng/searxng) instance. The quickest way to run one locally:
+
+```bash
+docker run -d -p 8080:8080 searxng/searxng
+```
+
+Then set `SEARCH_API_URL=http://localhost:8080` in your `.env`. If `SEARCH_API_URL` is not set, the web-search tool returns a kid-friendly fallback message instead of failing.
+
+### Tool Reference — web-search
+
+**Tool key:** `web-search`
+
+Queries the SearXNG JSON API and returns a formatted summary of results (title, snippet, link). Snippets are truncated at 150 characters.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `query` | yes | What to search for |
+| `max_results` | no | Maximum number of results to return (1–10, default 5) |
+
+### Tool Reference — web-fetch
+
+**Tool key:** `web-fetch`
+
+Fetches a URL, extracts the main content using Mozilla Readability (with a full-page markdown fallback), and returns a paginated text window.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `url` | yes | The web address to fetch |
+| `start` | no | Character position to start reading from (≥ 0, default 0) |
+| `count` | no | How many characters to return (500–16000, default 8000) |
+
+Long pages are returned in chunks. When there is more content, the response includes a pagination footer with the next `start` value.
+
+#### How it works
+
+1. The URL is validated — only `http:` and `https:` schemes are allowed.
+2. **Security**: requests to `localhost`, `127.0.0.1`, private IP ranges (`10.*`, `172.16–31.*`, `192.168.*`, `100.64–127.*`), and cloud metadata endpoints (`169.254.169.254`) are blocked.
+3. HTML is fetched with a 15-second timeout and a 2 MB size limit.
+4. Content is extracted via Mozilla Readability (best for articles); if that fails, the full page is converted to markdown via `node-html-markdown`, stripping `nav`, `footer`, `aside`, and `header` elements.
+5. Extracted content is cached in memory (up to 100 entries, 500 KB each) with a configurable TTL (`WEB_FETCH_CACHE_TTL`, default 10 minutes). LRU-style eviction drops the oldest entry when the cache is full.
+
+### Examples
+
+**Web search:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "ai-buddy",
+    "messages": [{"role": "user", "content": "How far away is the moon?"}]
+  }'
+```
+
+**Web fetch (the LLM calls this automatically after search):**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "ai-buddy",
+    "messages": [{"role": "user", "content": "Read this article and tell me about it: https://en.wikipedia.org/wiki/Moon"}]
   }'
 ```
