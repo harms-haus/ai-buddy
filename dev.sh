@@ -38,6 +38,10 @@ SYS_COLOR="$YELLOW"
 PIDS_FILE="$ROOT/.dev-pids"
 LOG_DIR="$ROOT/.dev-logs"
 
+# ── Required versions ─────────────────────────────────────
+REQUIRED_NODE_MAJOR=22   # Node.js >= 22.x
+PYTHON_BIN="python3"      # Python interpreter
+
 # ── Helpers ───────────────────────────────────────────────
 log()    { printf "${SYS_COLOR}${BOLD}[dev]${RESET} %s\n" "$*"; }
 log_ok() { printf "${SYS_COLOR}${BOLD}[dev]${RESET} ${GREEN}✓${RESET} %s\n" "$*"; }
@@ -102,12 +106,76 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# ── Stop existing services ───────────────────────────────
+# ══════════════════════════════════════════════════════════
+#  0. PREREQUISITE CHECKS
+# ══════════════════════════════════════════════════════════
+
+# ── Stop existing services first ─────────────────────────
 log "Stopping any existing services..."
 kill_port "$AGENT_PORT" "agent"
 kill_port "$TTS_PORT"   "tts"
 kill_port "$STT_PORT"   "stt"
 sleep 0.5
+
+# ── Check / install Node.js ──────────────────────────────
+if command -v node &>/dev/null; then
+    NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
+    if (( NODE_MAJOR >= REQUIRED_NODE_MAJOR )); then
+        log_ok "Node.js $(node --version) (>= ${REQUIRED_NODE_MAJOR}.x)"
+    else
+        log_err "Node.js $(node --version) is too old (need >= ${REQUIRED_NODE_MAJOR}.x)"
+        log "Installing Node.js ${REQUIRED_NODE_MAJOR}.x via nvm..."
+        if [[ ! -d "$HOME/.nvm" ]]; then
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+        fi
+        export NVM_DIR="$HOME/.nvm"
+        source "$NVM_DIR/nvm.sh"
+        nvm install "${REQUIRED_NODE_MAJOR}"
+        nvm use "${REQUIRED_NODE_MAJOR}"
+        log_ok "Installed Node.js $(node --version) via nvm"
+    fi
+else
+    log_err "Node.js not found"
+    log "Installing Node.js ${REQUIRED_NODE_MAJOR}.x via nvm..."
+    if [[ ! -d "$HOME/.nvm" ]]; then
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+    fi
+    export NVM_DIR="$HOME/.nvm"
+    source "$NVM_DIR/nvm.sh"
+    nvm install "${REQUIRED_NODE_MAJOR}"
+    nvm use "${REQUIRED_NODE_MAJOR}"
+    log_ok "Installed Node.js $(node --version) via nvm"
+fi
+
+# ── Ensure agent/data directory exists (for libsql/mastra.db) ──
+mkdir -p "$ROOT/agent/data"
+log_ok "agent/data/ directory ready"
+
+# ── Check / setup TTS virtual environment ─────────────────
+if [[ ! -f "$ROOT/tts/venv/bin/python" ]]; then
+    log "Creating TTS virtual environment..."
+    $PYTHON_BIN -m venv "$ROOT/tts/venv"
+    source "$ROOT/tts/venv/bin/activate"
+    pip install --upgrade pip
+    pip install -r "$ROOT/tts/requirements.txt"
+    deactivate
+    log_ok "TTS venv created and dependencies installed"
+else
+    log_ok "TTS venv exists"
+fi
+
+# ── Check / setup STT virtual environment ─────────────────
+if [[ ! -f "$ROOT/stt/venv/bin/python" ]]; then
+    log "Creating STT virtual environment..."
+    $PYTHON_BIN -m venv "$ROOT/stt/venv"
+    source "$ROOT/stt/venv/bin/activate"
+    pip install --upgrade pip
+    pip install -r "$ROOT/stt/requirements.txt"
+    deactivate
+    log_ok "STT venv created and dependencies installed"
+else
+    log_ok "STT venv exists"
+fi
 
 # ── Parse flags ──────────────────────────────────────────
 for arg in "$@"; do
