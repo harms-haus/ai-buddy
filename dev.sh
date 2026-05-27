@@ -168,7 +168,8 @@ if [[ ! -f "$ROOT/tts/venv/bin/activate" ]]; then
         log "CUDA detected — installing onnxruntime-gpu for TTS..."
         pip uninstall -y onnxruntime 2>/dev/null || true
         pip install onnxruntime-gpu
-        log_ok "onnxruntime-gpu installed"
+        pip install nvidia-cublas-cu12
+        log_ok "onnxruntime-gpu + nvidia-cublas-cu12 installed"
     fi
     deactivate
     log_ok "TTS venv created and dependencies installed"
@@ -177,11 +178,17 @@ else
     # Ensure onnxruntime-gpu is present when CUDA is available
     source "$ROOT/tts/venv/bin/activate"
     _has_gpu_rt="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("onnxruntime-gpu") is not None)' 2>/dev/null || echo False)"
+    _has_cublas="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("nvidia.cublas") is not None)' 2>/dev/null || echo False)"
     if has_cuda && [[ "$_has_gpu_rt" == "False" ]]; then
         log "CUDA detected but onnxruntime-gpu not installed — upgrading..."
         pip uninstall -y onnxruntime 2>/dev/null || true
         pip install onnxruntime-gpu
         log_ok "onnxruntime-gpu installed"
+    fi
+    if has_cuda && [[ "$_has_cublas" == "False" ]]; then
+        log "CUDA detected but nvidia-cublas-cu12 not installed — installing..."
+        pip install nvidia-cublas-cu12
+        log_ok "nvidia-cublas-cu12 installed"
     fi
     deactivate
 fi
@@ -292,6 +299,14 @@ log "Starting TTS ($TTS_BACKEND) on :$TTS_PORT..."
     # explicitly request CUDA via its ONNX_PROVIDER env var
     if has_cuda; then
         export ONNX_PROVIDER=CUDAExecutionProvider
+        # onnxruntime-gpu needs CUDA libs (libcublasLt etc.) on LD_LIBRARY_PATH
+        _pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+        _site="$ROOT/tts/venv/lib/$_pyver/site-packages"
+        for _dir in "$_site/nvidia/cublas/lib" "$_site/nvidia/cublas_cu12/lib"; do
+            if [[ -d "$_dir" ]]; then
+                export LD_LIBRARY_PATH="$_dir:${LD_LIBRARY_PATH:-}"
+            fi
+        done
     fi
     PYTHONUNBUFFERED=1 python server.py 2>&1
 ) > "$LOG_DIR/tts.pipe" 2>&1 &
