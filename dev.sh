@@ -167,7 +167,7 @@ if [[ ! -f "$ROOT/tts/venv/bin/activate" ]]; then
     if has_cuda; then
         log "CUDA detected — installing onnxruntime-gpu + CUDA runtime libs for TTS..."
         pip uninstall -y onnxruntime 2>/dev/null || true
-        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12
+        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 nvidia-cuda-nvrtc-cu12 nvidia-nvjitlink-cu12
         log_ok "onnxruntime-gpu + CUDA libs installed"
     fi
     deactivate
@@ -181,7 +181,7 @@ else
     if has_cuda && [[ "$_has_gpu_rt" == "False" || "$_has_cublas" == "False" ]]; then
         log "CUDA detected — installing onnxruntime-gpu + CUDA runtime libs for TTS..."
         pip uninstall -y onnxruntime 2>/dev/null || true
-        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12
+        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 nvidia-cuda-nvrtc-cu12 nvidia-nvjitlink-cu12
         log_ok "onnxruntime-gpu + CUDA libs installed"
     fi
     deactivate
