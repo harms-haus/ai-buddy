@@ -152,8 +152,9 @@ mkdir -p "$ROOT/agent/data"
 log_ok "agent/data/ directory ready"
 
 # ── Check / setup TTS virtual environment ─────────────────
-if [[ ! -f "$ROOT/tts/venv/bin/python" ]]; then
+if [[ ! -f "$ROOT/tts/venv/bin/activate" ]]; then
     log "Creating TTS virtual environment..."
+    rm -rf "$ROOT/tts/venv"
     $PYTHON_BIN -m venv "$ROOT/tts/venv"
     source "$ROOT/tts/venv/bin/activate"
     pip install --upgrade pip
@@ -165,8 +166,9 @@ else
 fi
 
 # ── Check / setup STT virtual environment ─────────────────
-if [[ ! -f "$ROOT/stt/venv/bin/python" ]]; then
+if [[ ! -f "$ROOT/stt/venv/bin/activate" ]]; then
     log "Creating STT virtual environment..."
+    rm -rf "$ROOT/stt/venv"
     $PYTHON_BIN -m venv "$ROOT/stt/venv"
     source "$ROOT/stt/venv/bin/activate"
     pip install --upgrade pip
@@ -263,7 +265,8 @@ log "Starting STT on :$STT_PORT..."
     cd "$ROOT/stt"
     source venv/bin/activate
     # Add nvidia cublas libs to library path for ctranslate2 CUDA support
-    CUBLAS_DIR="$ROOT/stt/venv/lib/python3.14/site-packages/nvidia/cublas/lib"
+    _pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+    CUBLAS_DIR="$ROOT/stt/venv/lib/$_pyver/site-packages/nvidia/cublas/lib"
     if [[ -d "$CUBLAS_DIR" ]]; then
         export LD_LIBRARY_PATH="$CUBLAS_DIR:${LD_LIBRARY_PATH:-}"
     fi
