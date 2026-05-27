@@ -292,10 +292,7 @@ echo "[ai-buddy] Starting Agent..."
     cd "\$ROOT/agent"
     # Load .env into environment (mastra start did this automatically,
     # but node .mastra/output/index.mjs does not)
-    if [[ -f .env ]]; then
-        eval "$(node -e \"const p=require('dotenv').config();Object.keys(p.parsed||{}).forEach(k=>console.log('export '+k+'='+JSON.stringify(p.parsed[k])))\" )" || true
-    fi
-    node .mastra/output/index.mjs 2>&1
+    node -r dotenv/config .mastra/output/index.mjs 2>&1
 ) >> "$LOG_DIR/agent.log" 2>&1 &
 PIDS+=(\$!)
 
