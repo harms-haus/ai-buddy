@@ -238,6 +238,11 @@ _nvm_dir="$(eval echo "~$SERVICE_USER")/.nvm"
 
 PIDS=()
 
+# Truncate logs on start (avoid stale output from previous runs)
+for _log in "$LOG_DIR"/stt.log "$LOG_DIR"/tts.log "$LOG_DIR"/agent.log; do
+    : > "\$_log"
+done
+
 cleanup() {
     echo "[ai-buddy] Shutting down..."
     for pid in "\${PIDS[@]}"; do
@@ -285,6 +290,16 @@ PIDS+=(\$!)
 echo "[ai-buddy] Starting Agent..."
 (
     cd "\$ROOT/agent"
+    # Load .env into environment (mastra start did this automatically,
+    # but node .mastra/output/index.mjs does not)
+    if [[ -f .env ]]; then
+        set -a
+        while IFS='=' read -r _key _val; do
+            [[ -z "\$_key" || "\$_key" == \#* ]] && continue
+            export "\$_key=\$_val"
+        done < .env
+        set +a
+    fi
     node .mastra/output/index.mjs 2>&1
 ) >> "$LOG_DIR/agent.log" 2>&1 &
 PIDS+=(\$!)
@@ -359,7 +374,7 @@ log_ok "Service installed and enabled on boot"
 #  7. START SERVICE
 # ══════════════════════════════════════════════════════════
 log "Starting $SERVICE_NAME service..."
-systemctl start "$SERVICE_NAME.service"
+systemctl restart "$SERVICE_NAME.service"
 
 # Wait a moment and show status
 sleep 3
