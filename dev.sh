@@ -163,32 +163,26 @@ if [[ ! -f "$ROOT/tts/venv/bin/activate" ]]; then
     source "$ROOT/tts/venv/bin/activate"
     pip install --upgrade pip
     pip install -r "$ROOT/tts/requirements.txt"
-    # Kokoro uses ONNX Runtime — install GPU variant when CUDA is present
+    # Kokoro uses ONNX Runtime — install GPU variant + CUDA libs when GPU is present
     if has_cuda; then
-        log "CUDA detected — installing onnxruntime-gpu for TTS..."
+        log "CUDA detected — installing onnxruntime-gpu + CUDA runtime libs for TTS..."
         pip uninstall -y onnxruntime 2>/dev/null || true
-        pip install onnxruntime-gpu
-        pip install nvidia-cublas-cu12
-        log_ok "onnxruntime-gpu + nvidia-cublas-cu12 installed"
+        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12
+        log_ok "onnxruntime-gpu + CUDA libs installed"
     fi
     deactivate
     log_ok "TTS venv created and dependencies installed"
 else
     log_ok "TTS venv exists"
-    # Ensure onnxruntime-gpu is present when CUDA is available
+    # Ensure onnxruntime-gpu + CUDA libs are present when GPU is available
     source "$ROOT/tts/venv/bin/activate"
     _has_gpu_rt="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("onnxruntime-gpu") is not None)' 2>/dev/null || echo False)"
     _has_cublas="$($PYTHON_BIN -c 'import importlib.util; print(importlib.util.find_spec("nvidia.cublas") is not None)' 2>/dev/null || echo False)"
-    if has_cuda && [[ "$_has_gpu_rt" == "False" ]]; then
-        log "CUDA detected but onnxruntime-gpu not installed — upgrading..."
+    if has_cuda && [[ "$_has_gpu_rt" == "False" || "$_has_cublas" == "False" ]]; then
+        log "CUDA detected — installing onnxruntime-gpu + CUDA runtime libs for TTS..."
         pip uninstall -y onnxruntime 2>/dev/null || true
-        pip install onnxruntime-gpu
-        log_ok "onnxruntime-gpu installed"
-    fi
-    if has_cuda && [[ "$_has_cublas" == "False" ]]; then
-        log "CUDA detected but nvidia-cublas-cu12 not installed — installing..."
-        pip install nvidia-cublas-cu12
-        log_ok "nvidia-cublas-cu12 installed"
+        pip install onnxruntime-gpu nvidia-cublas-cu12 nvidia-cuda-runtime-cu12 nvidia-curand-cu12 nvidia-cudnn-cu12
+        log_ok "onnxruntime-gpu + CUDA libs installed"
     fi
     deactivate
 fi
@@ -299,10 +293,9 @@ log "Starting TTS ($TTS_BACKEND) on :$TTS_PORT..."
     # explicitly request CUDA via its ONNX_PROVIDER env var
     if has_cuda; then
         export ONNX_PROVIDER=CUDAExecutionProvider
-        # onnxruntime-gpu needs CUDA libs (libcublasLt etc.) on LD_LIBRARY_PATH
+        # Add all nvidia pip package lib dirs to LD_LIBRARY_PATH for onnxruntime-gpu
         _pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
-        _site="$ROOT/tts/venv/lib/$_pyver/site-packages"
-        for _dir in "$_site/nvidia/cublas/lib" "$_site/nvidia/cublas_cu12/lib"; do
+        for _dir in "$ROOT/tts/venv/lib/$_pyver/site-packages/nvidia"/*/lib; do
             if [[ -d "$_dir" ]]; then
                 export LD_LIBRARY_PATH="$_dir:${LD_LIBRARY_PATH:-}"
             fi
@@ -320,10 +313,9 @@ log "Starting STT on :$STT_PORT..."
 (
     cd "$ROOT/stt"
     source venv/bin/activate
-    # Add nvidia cublas libs to library path for ctranslate2 CUDA support
+    # Add all nvidia pip package lib dirs to LD_LIBRARY_PATH for ctranslate2
     _pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
-    _site="$ROOT/stt/venv/lib/$_pyver/site-packages"
-    for _dir in "$_site/nvidia/cublas/lib" "$_site/nvidia/cublas_cu12/lib"; do
+    for _dir in "$ROOT/stt/venv/lib/$_pyver/site-packages/nvidia"/*/lib; do
         if [[ -d "$_dir" ]]; then
             export LD_LIBRARY_PATH="$_dir:${LD_LIBRARY_PATH:-}"
         fi
