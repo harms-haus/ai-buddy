@@ -209,6 +209,7 @@ log "Building agent..."
     if [[ -f "$_nvm_dir/nvm.sh" ]]; then
         source "$_nvm_dir/nvm.sh"
     fi
+    export PATH="$ROOT/agent/node_modules/.bin:$PATH"
     npm install --omit=dev 2>&1
     npm run build 2>&1
 )
@@ -232,6 +233,7 @@ PYTHON_BIN="$PYTHON_BIN"
 # Source nvm if available
 _nvm_dir="$(eval echo "~$SERVICE_USER")/.nvm"
 [[ -f "\$_nvm_dir/nvm.sh" ]] && source "\$_nvm_dir/nvm.sh"
+export PATH="\$ROOT/agent/node_modules/.bin:\$PATH"
 
 PIDS=()
 
