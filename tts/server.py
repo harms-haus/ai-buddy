@@ -481,6 +481,19 @@ async def main():
     print(f"Loading {backend_name} TTS backend...")
     backend = _create_backend(backend_name)
     voices = backend.get_voices()
+
+    # Report CUDA status (mirrors STT startup banner)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            _dev_name = torch.cuda.get_device_name(0)
+            _free_mib = torch.cuda.mem_get_info()[0] / (1024 ** 2)
+            print(f"[TTS] CUDA available ({_dev_name}, {_free_mib:.0f} MiB free)")
+        else:
+            print("[TTS] CUDA not available, using CPU")
+    except ImportError:
+        print("[TTS] PyTorch not installed, using CPU")
+
     print(f"{backend_name} backend loaded. Voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}")
 
     # Backward-compat: KOKORO_VOICE/TTS_VOICE, KOKORO_SPEED/TTS_SPEED
