@@ -10,6 +10,10 @@ const entitySchema = z.object({
   type: z.enum(['light', 'switch', 'scene', 'input_boolean', 'fan', 'media_player']),
   description: z.string().min(1),
   capabilities: z.array(z.enum(['brightness', 'color', 'color_temp'])).optional(),
+  unit_entity_id: z.string().regex(
+    /^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/,
+    'unit_entity_id must be in domain.entity_id format (e.g., media_player.satellite1)'
+  ).optional(),
 });
 
 const agentSchema = z.object({

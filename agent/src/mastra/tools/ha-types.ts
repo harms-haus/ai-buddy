@@ -4,6 +4,8 @@ export interface HaEntityConfig {
   type: "light" | "switch" | "scene" | "input_boolean" | "fan" | "media_player";
   description: string;
   capabilities?: ("brightness" | "color" | "color_temp")[];
+  /** HA entity ID of the physical satellite unit (e.g. media_player.satellite1) whose volume can be controlled independently of the Music Assistant player entity. */
+  unit_entity_id?: string;
 }
 
 /** Per-agent config from ha-entities.json */

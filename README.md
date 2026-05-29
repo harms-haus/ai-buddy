@@ -161,6 +161,7 @@ ai-buddy/
 │   │       ├── ha-control.ts       # Smart home control tool (lights, etc.)
 │   │       ├── ha-music.ts         # Music control tool (Music Assistant)
 │   │       ├── ha-music-config.ts  # Music Assistant config discovery & helpers
+│   │       ├── ha-volume.ts        # Speaker volume control tool
 │   │       ├── web-search.ts       # Web search tool (SearXNG)
 │   │       └── web-fetch.ts        # Web page fetcher with content extraction
 │   └── .env.example
@@ -188,6 +189,16 @@ The agent can control music playback through Home Assistant's **Music Assistant*
 - Each child's agent can have its own default speaker
 
 Music control requires the [Music Assistant](https://github.com/music-assistant/home-assistant) integration installed in Home Assistant. If it's not set up, the agent will politely let the kids know and suggest asking a grown-up for help.
+
+### Volume Control
+
+The agent can adjust speaker volume directly via the satellite unit's volume entity (independent of Music Assistant player volume):
+
+- **Increase or decrease** volume in steps of ~10% (0–10 scale)
+- **Mute or unmute** the speaker
+- Each child's agent targets its own configured speaker
+
+Requires `unit_entity_id` in the speaker entity configuration (see agent config). If no volume entity is configured, the agent lets the kids know and suggests asking a grown-up for help.
 
 ### Web Search & Fetch
 

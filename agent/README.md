@@ -155,15 +155,19 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 
 #### Music Players
 
-`media_player` entities are excluded from the `control-my-room` tool and instead appear in the `control-music` tool. Add a speaker entry like:
+`media_player` entities are excluded from the `control-my-room` tool and instead appear in the `control-music` tool. When `unit_entity_id` is set, they also power the `control-volume` tool for direct speaker volume control. Add a speaker entry like:
 
 ```json
 "speaker": {
   "entity_id": "media_player.zoe_speaker",
   "type": "media_player",
-  "description": "the speaker that plays music"
+  "description": "the speaker that plays music",
+  "unit_entity_id": "media_player.zoe_speaker_satellite"
 }
 ```
+
+- `unit_entity_id` — The HA entity ID of the physical satellite/hardware unit whose volume can be controlled independently of the Music Assistant player entity. Must match `domain.entity_id` format (e.g., `media_player.satellite1`).
+- **Optional** — if omitted, the volume tool gracefully reports "No volume-controllable speakers configured yet" rather than failing.
 
 ### Agents
 
@@ -233,6 +237,56 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   -d '{
     "model": "zoe-agent",
     "messages": [{"role": "user", "content": "play Let It Go"}]
+  }'
+```
+
+### Tool Reference — control-volume
+
+**Tool key:** `control-volume`
+
+Controls the volume of the satellite speaker directly. Uses the `unit_entity_id` entity from `ha-entities.json` for volume operations. Only available when a `media_player` entity with a `unit_entity_id` is configured for the agent.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `increase` | one of three | Steps to turn up volume (0–10, each step adds ~10%) |
+| `decrease` | one of three | Steps to turn down volume (0–10, each step removes ~10%) |
+| `mute` | one of three | `true` to mute, `false` to unmute |
+| `nickname` | no | Speaker nickname from `ha-entities.json`; defaults to first configured speaker |
+
+> **Note:** Exactly one of `increase`, `decrease`, or `mute` must be provided per call.
+
+### Examples
+
+**Turn up the volume:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "turn up the music"}]
+  }'
+```
+
+**Turn down the volume:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "make it quieter"}]
+  }'
+```
+
+**Mute the speaker:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "mute my speaker"}]
   }'
 ```
 

@@ -27,7 +27,8 @@
       "speaker": {
         "entity_id": "media_player.zoe_speaker",
         "type": "media_player",
-        "description": "the speaker that plays music"
+        "description": "the speaker that plays music",
+        "unit_entity_id": "media_player.zoe_speaker_satellite"
       }
     }
   },
