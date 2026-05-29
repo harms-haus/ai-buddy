@@ -221,13 +221,14 @@ export function createHaMusicTool(agentId: string) {
               const artists = (searchData as any)?.artists ?? [];
 
               // Score each result by how much of its name appears in the query.
-              // This gives best-match semantics:
-              //   "Golden from K-pop Demon Hunters" → track "Golden" scores 1.0 (all its words match)
-              //                                          → playlist "K-Pop Demon Hunters" scores ~0.75
-              //                                          → track wins because it's a closer match
-              //   "K-pop Demon Hunters"             → track "Golden" scores 0.0 (no words match)
-              //                                          → playlist "K-Pop Demon Hunters" scores ~0.75
-              //                                          → playlist wins
+              // Playlists and albums get a category boost so they win when scores are close.
+              // But if a track has a very high raw match score (≥ 0.9), it still wins outright.
+              // Examples with "Golden from K-pop Demon Hunters":
+              //   track "Golden"             → raw 1.0, effective 1.0 (high-track override wins)
+              //   playlist "K-Pop Demon Hunters" → raw ~0.75, effective 1.0 (boosted, but track wins)
+              // Examples with "K-pop Demon Hunters":
+              //   track "Golden"             → raw 0.0, effective 0.0
+              //   playlist "K-Pop Demon Hunters" → raw ~0.75, effective 1.0 (playlist wins)
               const queryWords = new Set(
                 rawInput.toLowerCase().replace(/[\p{P}\p{S}]/gu, "").split(/\s+/).filter(Boolean)
               );
@@ -240,18 +241,18 @@ export function createHaMusicTool(agentId: string) {
               }
 
               // Collect top candidates from each category
-              const candidates: Array<{ item: any; score: number; category: string }> = [];
+              const candidates: Array<{ item: any; score: number; category: string; effectiveScore: number }> = [];
               for (const t of tracks) {
-                candidates.push({ item: t, score: nameMatchScore(t.name ?? ""), category: "track" });
+                candidates.push({ item: t, score: nameMatchScore(t.name ?? ""), category: "track", effectiveScore: 0 });
               }
               for (const a of albums) {
-                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "album" });
+                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "album", effectiveScore: 0 });
               }
               for (const p of playlists) {
-                candidates.push({ item: p, score: nameMatchScore(p.name ?? ""), category: "playlist" });
+                candidates.push({ item: p, score: nameMatchScore(p.name ?? ""), category: "playlist", effectiveScore: 0 });
               }
               for (const a of artists) {
-                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "artist" });
+                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "artist", effectiveScore: 0 });
               }
 
               if (candidates.length === 0) {
@@ -260,17 +261,29 @@ export function createHaMusicTool(agentId: string) {
                 };
               }
 
-              // Pick the best match; on ties, prefer playlists > albums > tracks > artists
+              // Compute effective scores with category boosts
+              const categoryBoost: Record<string, number> = { playlist: 0.25, album: 0.10, track: 0, artist: 0 };
+              for (const c of candidates) {
+                c.effectiveScore = c.score + (categoryBoost[c.category] ?? 0);
+              }
+
+              // Sort: high-scoring tracks (≥ 0.9) win over everything;
+              // otherwise sort by effectiveScore (desc); ties broken by category rank.
               const categoryRank: Record<string, number> = { playlist: 0, album: 1, track: 2, artist: 3 };
               candidates.sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score;
+                const aHighTrack = a.category === "track" && a.score >= 0.9;
+                const bHighTrack = b.category === "track" && b.score >= 0.9;
+                if (aHighTrack !== bHighTrack) return aHighTrack ? -1 : 1;
+                const aEff = a.effectiveScore;
+                const bEff = b.effectiveScore;
+                if (bEff !== aEff) return bEff - aEff;
                 return (categoryRank[a.category] ?? 9) - (categoryRank[b.category] ?? 9);
               });
 
               const bestMatch = candidates[0];
               mediaId = bestMatch.item.uri ?? bestMatch.item.item_id ?? rawInput;
               foundName = bestMatch.item.name ?? rawInput;
-              console.log(`[ha-music] search resolved: type=${bestMatch.category}, score=${bestMatch.score.toFixed(2)}, name=${foundName}, uri=${mediaId}`);
+              console.log(`[ha-music] search resolved: type=${bestMatch.category}, score=${bestMatch.score.toFixed(2)}, effectiveScore=${bestMatch.effectiveScore.toFixed(2)}, name=${foundName}, uri=${mediaId}`);
             }
 
             console.log(`[ha-music] play_media: entity=${mediaPlayer.entity_id}, media_id=${mediaId}, name=${foundName}`);
