@@ -10,6 +10,176 @@ import {
 } from "./ha-music-config.js";
 import { getAgentConfig } from "./ha-config.js";
 
+const MEDIA_TYPE_KEYWORDS: Record<string, string> = {
+  playlist: "playlist",
+  mix: "playlist",
+  mixtape: "playlist",
+  track: "track",
+  song: "track",
+  tune: "track",
+  jam: "track",
+  album: "album",
+  record: "album",
+  lp: "album",
+  artist: "artist",
+  singer: "artist",
+  musician: "artist",
+  performer: "artist",
+  vocalist: "artist",
+};
+
+/**
+ * Detects a preferred media type from keywords in a search query.
+ * Maps words like "song"/"tune" → "track", "playlist"/"mix" → "playlist",
+ * "album"/"record" → "album", "artist"/"singer" → "artist".
+ * Returns null if no type keyword is found, or if multiple different types are detected.
+ */
+export function detectMediaType(query: string): string | null {
+  const words = query
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]/gu, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  const detectedTypes: string[] = [];
+  for (const word of words) {
+    if (MEDIA_TYPE_KEYWORDS[word]) {
+      detectedTypes.push(MEDIA_TYPE_KEYWORDS[word]);
+    }
+  }
+  // If exactly one unique type found, use it. Multiple types → null (search all).
+  const uniqueTypes = [...new Set(detectedTypes)];
+  return uniqueTypes.length === 1 ? uniqueTypes[0] : null;
+}
+
+/**
+ * Computes a word-overlap score between a query and a candidate name.
+ * Returns the fraction of the candidate's name words that appear in the query.
+ * Returns 0 if the candidate name is empty.
+ */
+export function nameMatchScore(query: string, name: string): number {
+  const queryWords = new Set(
+    query.toLowerCase().replace(/[\p{P}\p{S}]/gu, "").split(/\s+/).filter(Boolean)
+  );
+  const nameWords = name
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}]/gu, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (nameWords.length === 0) return 0;
+  const matchCount = nameWords.filter((w) => queryWords.has(w)).length;
+  return matchCount / nameWords.length;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  playlist: "playlists",
+  track: "songs",
+  album: "albums",
+  artist: "artists",
+};
+
+async function typeAwareSearch(
+  connection: any,
+  configEntryId: string,
+  query: string,
+  options: {
+    artist?: string;
+    limit?: number;
+    explicitMediaType?: string;
+  }
+): Promise<{
+  data: any;
+  detectedType: string | null;
+}> {
+  const detectedType = detectMediaType(query);
+  // Priority: explicitMediaType from LLM > detected type from query
+  const preferredType = options.explicitMediaType ?? detectedType;
+
+  if (preferredType) {
+    // First: search ONLY the preferred type
+    const filteredResults = await callService(
+      connection,
+      "music_assistant",
+      "search",
+      {
+        config_entry_id: configEntryId,
+        name: query,
+        media_type: preferredType,
+        ...(options.artist && { artist: options.artist }),
+        limit: options.limit ?? 5,
+      },
+      {},
+      true
+    );
+    const filteredData = (filteredResults as any)?.response ?? filteredResults;
+
+    // Check if results in the preferred category meet the threshold
+    const categoryKey = preferredType === "track" ? "tracks" : preferredType + "s";
+    const preferredResults = Array.isArray((filteredData as any)?.[categoryKey])
+      ? (filteredData as any)[categoryKey]
+      : [];
+
+    if (preferredResults.length > 0) {
+      // Check best score
+      const bestScore = Math.max(
+        ...preferredResults.map((item: any) =>
+          nameMatchScore(query, item.name ?? "")
+        )
+      );
+      if (bestScore >= 0.5) {
+        console.log(
+          `[ha-music] type-aware: preferredType=${preferredType}, bestScore=${bestScore.toFixed(2)}, query="${query}"`
+        );
+        return { data: filteredData, detectedType: preferredType };
+      }
+    }
+
+    // Fallback: search all types
+    console.log(
+      `[ha-music] type-aware: fallback from ${preferredType}, query="${query}"`
+    );
+    const fallbackResults = await callService(
+      connection,
+      "music_assistant",
+      "search",
+      {
+        config_entry_id: configEntryId,
+        name: query,
+        ...(options.artist && { artist: options.artist }),
+        limit: options.limit ?? 5,
+      },
+      {},
+      true
+    );
+    const fallbackData = (fallbackResults as any)?.response ?? fallbackResults;
+    // Check if fallback actually returned results in the preferred category
+    const fallbackCategoryKey = preferredType === "track" ? "tracks" : preferredType + "s";
+    const fallbackPreferredResults = Array.isArray((fallbackData as any)?.[fallbackCategoryKey])
+      ? (fallbackData as any)[fallbackCategoryKey]
+      : [];
+    return {
+      data: fallbackData,
+      detectedType: fallbackPreferredResults.length > 0 ? preferredType : null,
+    };
+  }
+
+  // No type preference — standard search
+  const results = await callService(
+    connection,
+    "music_assistant",
+    "search",
+    {
+      config_entry_id: configEntryId,
+      name: query,
+      ...(options.artist && { artist: options.artist }),
+      limit: options.limit ?? 5,
+    },
+    {},
+    true
+  );
+  const searchData = (results as any)?.response ?? results;
+  return { data: searchData, detectedType: null };
+}
+
 export function createHaMusicTool(agentId: string) {
   const description = buildMusicToolDescription(agentId);
 
@@ -38,7 +208,7 @@ export function createHaMusicTool(agentId: string) {
         .string()
         .optional()
         .describe(
-          "Type of media: artist, album, track, or playlist. Helps find the right thing."
+          "Type of media: artist, album, track, or playlist. Optional — the tool auto-detects type from keywords like 'song', 'playlist', 'album', 'artist'. Only set this for types not auto-detected."
         ),
       artist: z
         .string()
@@ -91,22 +261,12 @@ export function createHaMusicTool(agentId: string) {
               };
             }
 
-            const results = await callService(
+            const { data: searchData, detectedType } = await typeAwareSearch(
               connection,
-              "music_assistant",
-              "search",
-              {
-                config_entry_id: configEntryId,
-                name: inputData.query,
-                ...(inputData.artist && { artist: inputData.artist }),
-                ...(inputData.media_type && { media_type: inputData.media_type }),
-                limit: 5,
-              },
-              {},
-              true
+              configEntryId,
+              inputData.query,
+              { artist: inputData.artist, limit: 5, explicitMediaType: inputData.media_type }
             );
-
-            const searchData = (results as any)?.response ?? results;
 
             // Format results into a kid-friendly report
             const sections: string[] = [];
@@ -161,8 +321,10 @@ export function createHaMusicTool(agentId: string) {
               };
             }
 
+            const typeLabel = detectedType && CATEGORY_LABELS[detectedType];
+            const header = typeLabel ? `I found some ${typeLabel}!` : "I found some music!";
             return {
-              report: `I found some music!\n${sections.join("\n")}`,
+              report: `${header}\n${sections.join("\n")}`,
             };
           }
 
@@ -198,22 +360,15 @@ export function createHaMusicTool(agentId: string) {
 
             if (!isUri) {
               // Not a URI — search first to resolve the name to something playable
-              const searchResults = await callService(
+              const { data: searchData, detectedType: playDetectedType } = await typeAwareSearch(
                 connection,
-                "music_assistant",
-                "search",
-                {
-                  config_entry_id: configEntryId,
-                  name: rawInput,
-                  ...(inputData.artist && { artist: inputData.artist }),
-                  ...(inputData.media_type && { media_type: inputData.media_type }),
-                  limit: 3,
-                },
-                {},
-                true
+                configEntryId,
+                rawInput,
+                { artist: inputData.artist, limit: 3, explicitMediaType: inputData.media_type }
               );
-
-              const searchData = (searchResults as any)?.response ?? searchResults;
+              console.log(
+                `[ha-music] type-aware play: preferredType=${playDetectedType}, query="${rawInput}"`
+              );
 
               const playlists = (searchData as any)?.playlists ?? [];
               const albums = (searchData as any)?.albums ?? [];
@@ -225,34 +380,23 @@ export function createHaMusicTool(agentId: string) {
               // But if a track has a very high raw match score (≥ 0.9), it still wins outright.
               // Examples with "Golden from K-pop Demon Hunters":
               //   track "Golden"             → raw 1.0, effective 1.0 (high-track override wins)
-              //   playlist "K-Pop Demon Hunters" → raw ~0.75, effective 1.0 (boosted, but track wins)
+              //   playlist "K-Pop Demon Hunters Playlist" → raw ~0.75, effective 1.0 (boosted, but track wins)
               // Examples with "K-pop Demon Hunters":
               //   track "Golden"             → raw 0.0, effective 0.0
-              //   playlist "K-Pop Demon Hunters" → raw ~0.75, effective 1.0 (playlist wins)
-              const queryWords = new Set(
-                rawInput.toLowerCase().replace(/[\p{P}\p{S}]/gu, "").split(/\s+/).filter(Boolean)
-              );
-
-              function nameMatchScore(name: string): number {
-                const nameWords = name.toLowerCase().replace(/[\p{P}\p{S}]/gu, "").split(/\s+/).filter(Boolean);
-                if (nameWords.length === 0) return 0;
-                const matchCount = nameWords.filter((w: string) => queryWords.has(w)).length;
-                return matchCount / nameWords.length;
-              }
-
+              //   playlist "K-Pop Demon Hunters Playlist" → raw ~0.75, effective 1.0 (playlist wins)
               // Collect top candidates from each category
               const candidates: Array<{ item: any; score: number; category: string; effectiveScore: number }> = [];
               for (const t of tracks) {
-                candidates.push({ item: t, score: nameMatchScore(t.name ?? ""), category: "track", effectiveScore: 0 });
+                candidates.push({ item: t, score: nameMatchScore(rawInput, t.name ?? ""), category: "track", effectiveScore: 0 });
               }
               for (const a of albums) {
-                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "album", effectiveScore: 0 });
+                candidates.push({ item: a, score: nameMatchScore(rawInput, a.name ?? ""), category: "album", effectiveScore: 0 });
               }
               for (const p of playlists) {
-                candidates.push({ item: p, score: nameMatchScore(p.name ?? ""), category: "playlist", effectiveScore: 0 });
+                candidates.push({ item: p, score: nameMatchScore(rawInput, p.name ?? ""), category: "playlist", effectiveScore: 0 });
               }
               for (const a of artists) {
-                candidates.push({ item: a, score: nameMatchScore(a.name ?? ""), category: "artist", effectiveScore: 0 });
+                candidates.push({ item: a, score: nameMatchScore(rawInput, a.name ?? ""), category: "artist", effectiveScore: 0 });
               }
 
               if (candidates.length === 0) {

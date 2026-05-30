@@ -166,7 +166,7 @@ ai-buddy/
 │   │       ├── ha-volume.ts        # Speaker volume control tool
 │   │       ├── web-search.ts       # Web search tool (SearXNG)
 │   │       ├── web-fetch.ts        # Web page fetcher with content extraction
-│   │       └── username.ts         # Username/nickname storage & change tool
+│   │       └── names.ts            # Name storage (user + agent) & change tool
 │   └── .env.example
 ├── stt/                    # Speech-to-text (Python, Wyoming)
 │   ├── server.py               # Wyoming STT server
@@ -191,6 +191,20 @@ The agent can control music playback through Home Assistant's **Music Assistant*
 - **Pause, resume, skip, go back, stop** playback
 - Each child's agent can have its own default speaker
 
+#### Type-Aware Search
+
+Search queries are automatically analyzed for media-type keywords (e.g. "playlist", "song", "album", "artist", "singer", "mix", "tune", "jam", "record", "LP", etc.). When a single type is detected, the search targets that category first. If no results score at or above 0.5 (word-match ratio), the search falls back to all categories.
+
+#### Smart Play Resolution
+
+When playing by name (not a URI), the tool searches Music Assistant and ranks candidates using:
+
+- **Word-match scoring** — fraction of the result's name words that appear in the query
+- **Category boosts** — playlists get +0.25, albums get +0.10, to prefer collections over individual tracks when scores are close
+- **High-score track override** — a track with a raw score ≥ 0.9 wins over everything, ensuring exact song matches aren't buried by boosted playlists
+
+This prevents situations like a playlist named "K-Pop Demon Hunters" winning over the song "Golden" when the child says "play Golden from K-Pop Demon Hunters".
+
 Music control requires the [Music Assistant](https://github.com/music-assistant/home-assistant) integration installed in Home Assistant. If it's not set up, the agent will politely let the kids know and suggest asking a grown-up for help.
 
 ### Volume Control
@@ -212,17 +226,17 @@ The agent can search the web and read web pages using a self-hosted **SearXNG** 
 - Both tools degrade gracefully with kid-friendly messages when SearXNG is unconfigured or requests fail
 - Uses `@mozilla/readability`, `linkedom`, and `node-html-markdown` for HTML-to-text extraction
 
-### Username / Nickname Customization
+### Name Customization
 
-Each child's agent (Zoe and Max) can address the user by a custom name:
+Each agent can address the user by a custom name and be called by a custom name itself:
 
-- **Default names** — `zoe-agent` calls her "zoe", `max-agent` calls him "max", and the generic `ai-buddy` / `kids-agent` defaults to "kiddo"
-- **Changing the name** — Zoe or Max can say something like "call me Zo-Zo" and the agent uses the `change-username` tool to update it on the spot
-- **Persistence** — names are stored in `agent/data/usernames.json`, keyed by agent ID, and survive across conversations (separate from chat memory)
-- **Dynamic system prompt** — each request prepends `The user's name is '...'` to the agent's instructions so the LLM always uses the current name
+- **Default usernames** — `zoe-agent` calls her "zoe", `max-agent` calls him "max", and the generic `ai-buddy` / `kids-agent` defaults to "kiddo". All agents default to the agent name "Buddy".
+- **Changing names** — a child can say "call me Zo-Zo" (changes username via `new_username`) or "I'll call you Sparky" (changes agent name via `new_agentname`) using the `change-names` tool
+- **Persistence** — names are stored in `agent/data/usernames.json`, keyed by agent ID, with both `username` and `agentname` fields per agent, and survive across conversations (separate from chat memory)
+- **Dynamic system prompt** — each request prepends `Your name is "{agentname}". You are a {description}. The user's name is '{username}'.` to the agent's instructions so the LLM always uses the current names
 - **Input validation** — names are limited to Unicode letters, numbers, spaces, hyphens, and apostrophes, with a maximum of 32 characters; embedded newlines are stripped as a defense-in-depth measure
 
-> **Note:** The generic `kids-agent` does not include the `change-username` tool — only `zoe-agent` and `max-agent` support nickname changes.
+All three agents — `zoe-agent`, `max-agent`, and `ai-buddy` — include the `change-names` tool.
 
 ## Hardware
 

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build && node scripts/fix-mastra-build.mjs",
-    "start": "mastra start"
+    "start": "mastra start",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@mastra/core": "latest",
@@ -23,6 +25,7 @@
     "@types/node": "latest",
     "@types/ws": "^8.18.1",
     "mastra": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.1.7"
   }
 }

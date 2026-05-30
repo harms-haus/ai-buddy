@@ -177,7 +177,7 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 | `zoe-agent` | `zoe-agent` or `zoe` | Zoe's personal agent |
 | `max-agent` | `max-agent` or `max` | Max's personal agent |
 
-> **Note:** `zoe-agent` and `max-agent` support dynamic usernames via the `change-username` tool. `ai-buddy` uses a fixed default name ("kiddo") and does not expose the tool. See [Username / Nickname](#username--nickname) for details.
+> **Note:** All three agents support dynamic usernames and agent names via the `change-names` tool. See [Name Customization](#name-customization) for details.
 
 ### Example
 
@@ -187,34 +187,36 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   -d '{"model": "zoe-agent", "stream": true, "messages": [{"role": "user", "content": "Turn on my star show!"]}'
 ```
 
-## Username / Nickname
+## Name Customization
 
-Each agent greets the user by name. The name is injected into the system prompt as `The user's name is '...'` on every request, so the LLM always knows what to call them.
+Each agent greets the user by name and introduces itself by its own name. Each request prepends "Your name is "{agentname}". You are a {description}. The user's name is '{username}'." to the agent's instructions, so the LLM always knows what to call itself and the user.
 
 ### Default Names
 
-| Agent ID | Default Name |
-|----------|-------------|
-| `zoe-agent` | `zoe` |
-| `max-agent` | `max` |
-| `ai-buddy` | `kiddo` |
+| Agent ID | Default Username | Default Agent Name |
+|----------|-----------------|-------------------|
+| `zoe-agent` | `zoe` | `Buddy` |
+| `max-agent` | `max` | `Buddy` |
+| `ai-buddy` | `kiddo` | `Buddy` |
 
 ### How It Works
 
-- `zoe-agent` and `max-agent` include the `change-username` tool, allowing the user to change what the agent calls them at any time (e.g., "call me Zo-Zo").
-- `ai-buddy` does **not** have the tool — it always uses the default name `kiddo`.
-- Names are persisted in `data/usernames.json`, keyed by agent ID. This is separate from Mastra Memory and survives across conversation threads.
-- If `data/usernames.json` doesn't exist or is unreadable, the agent falls back to its default name.
+- All three agents include the `change-names` tool, allowing the user to change what the agent calls them and what the agent calls itself at any time (e.g., "call me Zo-Zo" or "call yourself Sparky").
+- Names are persisted in `data/usernames.json`, keyed by agent ID, storing both username and agent name. This is separate from Mastra Memory and survives across conversation threads.
+- If `data/usernames.json` doesn't exist or is unreadable, the agent falls back to its default names.
 
-### Tool Reference — change-username
+### Tool Reference — change-names
 
-**Tool key:** `change-username`
+**Tool key:** `change-names`
 
-Changes the name the agent uses for the user. Only available on `zoe-agent` and `max-agent`.
+Changes the name the agent uses for the user and/or the name the agent uses for itself. Available on all three agents.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `new_name` | yes | The new name (1–32 characters, letters, numbers, spaces, hyphens, and apostrophes only) |
+| `new_username` | at least one | The new name for the user (1–32 characters, letters, numbers, spaces, hyphens, and apostrophes only) |
+| `new_agentname` | at least one | The new name for the AI buddy (1–32 characters, same character rules) |
+
+> **Note:** At least one of `new_username` or `new_agentname` must be provided. Both can be provided in a single call.
 
 ### Examples
 
@@ -229,18 +231,29 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   }'
 ```
 
-**Change Max's nickname:**
+**Change Max's nickname and the agent's name:**
 
 ```bash
 curl -X POST http://localhost:4111/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "max-agent",
-    "messages": [{"role": "user", "content": "call me Maximus"}]
+    "messages": [{"role": "user", "content": "call me Maximus and call yourself Sparky"}]
   }'
 ```
 
-The name is stored immediately and will be used in all future conversations with that agent.
+**Change just the agent's name:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "ai-buddy",
+    "messages": [{"role": "user", "content": "I want to call you Buddy Bear"}]
+  }'
+```
+
+Names are stored immediately and will be used in all future conversations with that agent.
 
 ## Music Control
 
@@ -260,7 +273,7 @@ The agent can play and control music through the **Music Assistant** integration
 | `action` | yes | One of: `search`, `play`, `pause`, `resume`, `next`, `previous`, `stop` |
 | `query` | for search/play | Song name, artist, album, or playlist to search for |
 | `media_id` | play | URI or identifier from search results (overrides `query` when playing) |
-| `media_type` | no | `artist`, `album`, `track`, or `playlist` — helps narrow results |
+| `media_type` | no | `artist`, `album`, `track`, or `playlist` — auto-detected from the query in most cases (see [Type-Aware Search](#type-aware-search--smart-ranking)); rarely needs to be set explicitly |
 | `artist` | no | Artist name to refine the search |
 | `nickname` | no | Speaker nickname from `ha-entities.json`; defaults to the first configured speaker |
 
@@ -272,6 +285,46 @@ Music playback uses a two-step flow:
 2. **Play** — The LLM calls `control-music` with `action: "play"` and the `media_id` from step 1.
 
 Transport controls (`pause`, `resume`, `next`, `previous`, `stop`) are single-step calls that target the configured speaker.
+
+### Type-Aware Search & Smart Ranking
+
+The music tool automatically detects what kind of media the user is looking for and optimizes search results accordingly. This happens in two stages: **query analysis** and **result ranking**.
+
+#### Automatic Type Detection
+
+When a query is provided (for either `search` or `play`), the tool parses it for type-related keywords and maps them to a media type:
+
+| Keywords | Resolved Type |
+|----------|--------------|
+| `playlist`, `mix`, `mixtape` | `playlist` |
+| `track`, `song`, `tune`, `jam` | `track` |
+| `album`, `record`, `lp` | `album` |
+| `artist`, `singer`, `musician`, `performer`, `vocalist` | `artist` |
+
+The query is stripped of punctuation and split into words. If **exactly one** unique media type is found across all words, the search is filtered to that type via Music Assistant's `media_type` parameter. If multiple types are detected (e.g. "play the album song"), no filter is applied and all types are searched.
+
+#### Search Fallback
+
+When a type is detected, the tool first searches **only** that type. If the best name-match score among results is below **0.5** (i.e. no result's name overlaps at least 50% with the query words), a second unfiltered search across all types is performed automatically.
+
+#### Smart Result Ranking in Play
+
+When the `play` action receives a plain name (not a URI), it searches for matches and ranks them with category-aware scoring:
+
+1. **Name-match score** — Each result is scored by what fraction of its name's words appear in the query.
+2. **Category boosts** applied to the raw score:
+   - Playlists: **+0.25**
+   - Albums: **+0.10**
+   - Tracks: no boost
+   - Artists: no boost
+3. **High-track override** — If a track has a raw score ≥ **0.9** (near-exact name match), it wins over everything regardless of category boosts.
+4. **Tiebreaking** — Equal effective scores are broken by category rank: playlist > album > track > artist.
+
+**Example:** Querying `"K-pop Demon Hunters"` — a playlist named "K-Pop Demon Hunters Playlist" scores ~0.75 raw + 0.25 boost = 1.0 effective, beating a track named "Golden" that scores 0.0. But querying `"Golden"` — the track "Golden" scores 1.0 raw, triggering the high-track override and winning over the playlist.
+
+#### LLM `media_type` Parameter
+
+The `media_type` parameter in the tool schema lets the LLM explicitly specify a type. When set, it takes **priority** over auto-detected types. In practice, the auto-detection handles most queries correctly, so the LLM rarely needs to set this explicitly.
 
 ### Examples
 
