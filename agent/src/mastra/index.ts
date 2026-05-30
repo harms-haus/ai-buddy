@@ -4,6 +4,7 @@ import { registerApiRoute } from '@mastra/core/server';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { performance } from 'perf_hooks';
+import { createHash } from 'node:crypto';
 
 import { kidsAgent } from './agents/kids-agent.js';
 import { zoeAgent } from './agents/zoe-agent.js';
@@ -21,6 +22,37 @@ const AGENT_MAP: Record<string, string> = {
   'max-agent': 'maxAgent',
   'max': 'maxAgent',
 };
+
+/**
+ * Derive a stable thread ID from the conversation when no explicit thread_id is provided.
+ *
+ * Strategy: hash the first user message + model name.
+ *
+ * Why only the first message?
+ *   Home Assistant's Extended OpenAI Conversation sends the full message history on
+ *   every request (the array grows with each turn). If we hashed ALL messages, the
+ *   thread ID would change mid-conversation, breaking Mastra Memory retrieval.
+ *   Hashing just the first message keeps the ID stable for the lifetime of a
+ *   conversation.
+ *
+ * Collision risk:
+ *   Two conversations that start with the same first user message AND target the
+ *   same agent will share a thread ID, causing their Mastra Memory histories to mix.
+ *   In practice this risk is LOW because:
+ *     1. Each kid uses a distinct agent (zoe-agent / max-agent), so cross-kid
+ *        collisions are impossible — the model name is part of the hash.
+ *     2. Voice-initiated queries tend to be unique ("hey jarvis, what time is it",
+ *        "play let it go", etc.).
+ *     3. Mastra Memory's `lastMessages` window limits any cross-contamination.
+ *
+ * Proper fix:
+ *   If Home Assistant's integration ever exposes its internal `conversation_id` in
+ *   the request body, prefer that over this derived hash.
+ */
+function deriveThreadId(messages: Array<{role: string; content: string}>, model: string): string {
+  const firstUserMsg = messages.find(m => m.role === 'user')?.content ?? '';
+  return createHash('sha256').update(firstUserMsg + ':' + model).digest('hex').slice(0, 16);
+}
 
 /**
  * OpenAI Chat Completions compatible endpoint.
@@ -70,16 +102,18 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     const t_start = performance.now();
     console.log(`[agent] request | chars=${lastUserMessage.length} | text=${JSON.stringify(lastUserMessage)}`);
 
-    // Build thread ID from conversation metadata if provided
-    const threadId = body.thread_id as string | undefined;
+    // Resolve thread ID: use explicit thread_id if provided (e.g., from tests),
+    // otherwise derive a stable ID from the first user message + model
+    const threadId = (body.thread_id as string | undefined) ?? deriveThreadId(messages, model);
+    const resourceId = 'home-assistant';
 
     // --- Streaming response ---
     if (stream) {
       let streamResult;
       try {
-        streamResult = await agent.stream(lastUserMessage, {
+        streamResult = await agent.stream(messages as any, {
           maxSteps: 5,
-          ...(threadId && { threadId }),
+          memory: { thread: threadId, resource: resourceId },
           ...(maxTokens !== undefined || temperature !== undefined) && {
             modelSettings: {
               ...(maxTokens !== undefined && { maxTokens }),
@@ -192,9 +226,9 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     // --- Non-streaming response ---
     let result;
     try {
-      result = await agent.generate(lastUserMessage, {
+      result = await agent.generate(messages as any, {
         maxSteps: 5,
-        ...(threadId && { threadId }),
+        memory: { thread: threadId, resource: resourceId },
         ...(maxTokens !== undefined || temperature !== undefined) && {
           modelSettings: {
             ...(maxTokens !== undefined && { maxTokens }),
