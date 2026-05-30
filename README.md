@@ -155,7 +155,9 @@ ai-buddy/
 │   ├── src/mastra/
 │   │   ├── index.ts            # Mastra entry + OpenAI-compatible routes
 │   │   ├── agents/
-│   │   │   └── kids-agent.ts   # Agent definition + system prompt
+│   │   │   ├── kids-agent.ts      # Generic kids agent definition + system prompt
+│   │   │   ├── zoe-agent.ts       # Zoe's personalized agent
+│   │   │   └── maxwell-agent.ts   # Max's personalized agent
 │   │   └── tools/
 │   │       ├── weather.ts          # Weather tool (Open-Meteo API)
 │   │       ├── ha-control.ts       # Smart home control tool (lights, etc.)
@@ -163,7 +165,8 @@ ai-buddy/
 │   │       ├── ha-music-config.ts  # Music Assistant config discovery & helpers
 │   │       ├── ha-volume.ts        # Speaker volume control tool
 │   │       ├── web-search.ts       # Web search tool (SearXNG)
-│   │       └── web-fetch.ts        # Web page fetcher with content extraction
+│   │       ├── web-fetch.ts        # Web page fetcher with content extraction
+│   │       └── username.ts         # Username/nickname storage & change tool
 │   └── .env.example
 ├── stt/                    # Speech-to-text (Python, Wyoming)
 │   ├── server.py               # Wyoming STT server
@@ -208,6 +211,18 @@ The agent can search the web and read web pages using a self-hosted **SearXNG** 
 - **Fetch and read** web page content, extracting readable article text with pagination for long pages
 - Both tools degrade gracefully with kid-friendly messages when SearXNG is unconfigured or requests fail
 - Uses `@mozilla/readability`, `linkedom`, and `node-html-markdown` for HTML-to-text extraction
+
+### Username / Nickname Customization
+
+Each child's agent (Zoe and Max) can address the user by a custom name:
+
+- **Default names** — `zoe-agent` calls her "zoe", `max-agent` calls him "max", and the generic `ai-buddy` / `kids-agent` defaults to "kiddo"
+- **Changing the name** — Zoe or Max can say something like "call me Zo-Zo" and the agent uses the `change-username` tool to update it on the spot
+- **Persistence** — names are stored in `agent/data/usernames.json`, keyed by agent ID, and survive across conversations (separate from chat memory)
+- **Dynamic system prompt** — each request prepends `The user's name is '...'` to the agent's instructions so the LLM always uses the current name
+- **Input validation** — names are limited to Unicode letters, numbers, spaces, hyphens, and apostrophes, with a maximum of 32 characters; embedded newlines are stripped as a defense-in-depth measure
+
+> **Note:** The generic `kids-agent` does not include the `change-username` tool — only `zoe-agent` and `max-agent` support nickname changes.
 
 ## Hardware
 

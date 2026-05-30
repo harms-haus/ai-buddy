@@ -7,15 +7,15 @@ import { createHaMusicTool } from "../tools/ha-music.js";
 import { createHaVolumeTool } from "../tools/ha-volume.js";
 import { webSearchTool } from "../tools/web-search.js";
 import { webFetchTool } from "../tools/web-fetch.js";
+import { getUsername, createChangeUsernameTool } from "../tools/username.js";
 
 const haControlTool = createHaControlTool("max-agent");
 const haMusicTool = createHaMusicTool("max-agent");
 const haVolumeTool = createHaVolumeTool("max-agent");
 
-export const maxAgent = new Agent({
-  id: "max-agent",
-  name: "Max's Buddy",
-  instructions: `You are a very patient, gentle, and supportive AI buddy for Max.
+const changeUsernameTool = createChangeUsernameTool("max-agent");
+
+const BASE_INSTRUCTIONS = `You are a very patient, gentle, and supportive AI buddy for Max.
 
 Guidelines:
 - Always be kind, gentle, and extra patient.
@@ -32,7 +32,16 @@ Guidelines:
 - When Max asks to play music or control music, use the control-music tool. If the music is already set to what he wants but is paused, use action: "resume" to unpause it. Otherwise, first search for what he wants (action: "search"), then play it (action: "play") using the media_id from search results. He can also pause, skip songs, or stop. Keep music confirmations VERY brief — just 1-2 short sentences. If he names a speaker, use that as the nickname.
 - When Max asks to change the volume, use the control-volume tool. He can say things like "turn it up" or "make it louder" (use increase), "turn it down" or "make it quieter" (use decrease), "set volume to 8" or "turn it to 5" (use set_volume), or "mute the speaker" (use mute). Use set_volume when he wants a specific volume level (0–10). Use increase/decrease when he says "by" a number (like "turn it up by 3"). Keep confirmations VERY brief — just 1-2 short sentences.
 - When Max asks about something you don't know, use the web-search tool to look it up. Keep the answer very short and simple. If you need more details, use the web-fetch tool to read a web page.
-- When you need to read a web page, use the web-fetch tool. It will tell you if there's more to read.`,
+- When you need to read a web page, use the web-fetch tool. It will tell you if there's more to read.
+- When Max asks you to call him a different name, use the change-username tool with the new name. After that, always use the new name.`;
+
+export const maxAgent = new Agent({
+  id: "max-agent",
+  name: "Max's Buddy",
+  instructions: async () => {
+    const username = await getUsername("max-agent");
+    return `The user's name is '${username}'.\n\n${BASE_INSTRUCTIONS}`;
+  },
   model: process.env.MODEL_NAME || "openai/gpt-4o",
   memory: new Memory({
     options: {
@@ -47,5 +56,6 @@ Guidelines:
     "control-volume": haVolumeTool,
     "web-search": webSearchTool,
     "web-fetch": webFetchTool,
+    "change-username": changeUsernameTool,
   },
 });

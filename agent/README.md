@@ -177,6 +177,8 @@ Each agent has a list of allowed entities with nicknames. The tool description d
 | `zoe-agent` | `zoe-agent` or `zoe` | Zoe's personal agent |
 | `max-agent` | `max-agent` or `max` | Max's personal agent |
 
+> **Note:** `zoe-agent` and `max-agent` support dynamic usernames via the `change-username` tool. `ai-buddy` uses a fixed default name ("kiddo") and does not expose the tool. See [Username / Nickname](#username--nickname) for details.
+
 ### Example
 
 ```bash
@@ -184,6 +186,61 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model": "zoe-agent", "stream": true, "messages": [{"role": "user", "content": "Turn on my star show!"]}'
 ```
+
+## Username / Nickname
+
+Each agent greets the user by name. The name is injected into the system prompt as `The user's name is '...'` on every request, so the LLM always knows what to call them.
+
+### Default Names
+
+| Agent ID | Default Name |
+|----------|-------------|
+| `zoe-agent` | `zoe` |
+| `max-agent` | `max` |
+| `ai-buddy` | `kiddo` |
+
+### How It Works
+
+- `zoe-agent` and `max-agent` include the `change-username` tool, allowing the user to change what the agent calls them at any time (e.g., "call me Zo-Zo").
+- `ai-buddy` does **not** have the tool — it always uses the default name `kiddo`.
+- Names are persisted in `data/usernames.json`, keyed by agent ID. This is separate from Mastra Memory and survives across conversation threads.
+- If `data/usernames.json` doesn't exist or is unreadable, the agent falls back to its default name.
+
+### Tool Reference — change-username
+
+**Tool key:** `change-username`
+
+Changes the name the agent uses for the user. Only available on `zoe-agent` and `max-agent`.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `new_name` | yes | The new name (1–32 characters, letters, numbers, spaces, hyphens, and apostrophes only) |
+
+### Examples
+
+**Change Zoe's nickname:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "call me Zo-Zo from now on"}]
+  }'
+```
+
+**Change Max's nickname:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "max-agent",
+    "messages": [{"role": "user", "content": "call me Maximus"}]
+  }'
+```
+
+The name is stored immediately and will be used in all future conversations with that agent.
 
 ## Music Control
 
