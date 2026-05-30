@@ -75,16 +75,27 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
 
     // --- Streaming response ---
     if (stream) {
-      const streamResult = await agent.stream(lastUserMessage, {
-        maxSteps: 5,
-        ...(threadId && { threadId }),
-        ...(maxTokens !== undefined || temperature !== undefined) && {
-          modelSettings: {
-            ...(maxTokens !== undefined && { maxTokens }),
-            ...(temperature !== undefined && { temperature }),
+      let streamResult;
+      try {
+        streamResult = await agent.stream(lastUserMessage, {
+          maxSteps: 5,
+          ...(threadId && { threadId }),
+          ...(maxTokens !== undefined || temperature !== undefined) && {
+            modelSettings: {
+              ...(maxTokens !== undefined && { maxTokens }),
+              ...(temperature !== undefined && { temperature }),
+            },
           },
-        },
-      });
+        });
+      } catch (err: any) {
+        console.error('[agent] stream error:', err?.message ?? err);
+        return c.json(
+          {
+            error: { message: err?.message ?? 'Stream initialization failed', type: 'server_error' },
+          },
+          500,
+        );
+      }
 
       const id = `chatcmpl-${Date.now().toString(36)}`;
       const created = Math.floor(Date.now() / 1000);
@@ -115,6 +126,20 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
                       finish_reason: null,
                     },
                   ],
+                }),
+              );
+            }
+
+            // Empty-response fallback
+            if (!fullText || fullText.trim() === '') {
+              fullText = 'Hmm, I had trouble with that. Can you try again?';
+              sendChunk(
+                JSON.stringify({
+                  id,
+                  object: 'chat.completion.chunk',
+                  created,
+                  model,
+                  choices: [{ index: 0, delta: { content: fullText }, finish_reason: null }],
                 }),
               );
             }
@@ -165,18 +190,30 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
     }
 
     // --- Non-streaming response ---
-    const result = await agent.generate(lastUserMessage, {
-      maxSteps: 5,
-      ...(threadId && { threadId }),
-      ...(maxTokens !== undefined || temperature !== undefined) && {
-        modelSettings: {
-          ...(maxTokens !== undefined && { maxTokens }),
-          ...(temperature !== undefined && { temperature }),
+    let result;
+    try {
+      result = await agent.generate(lastUserMessage, {
+        maxSteps: 5,
+        ...(threadId && { threadId }),
+        ...(maxTokens !== undefined || temperature !== undefined) && {
+          modelSettings: {
+            ...(maxTokens !== undefined && { maxTokens }),
+            ...(temperature !== undefined && { temperature }),
+          },
         },
-      },
-    });
+      });
+    } catch (err: any) {
+      console.error('[agent] generate error:', err?.message ?? err);
+      return c.json(
+        {
+          error: { message: err?.message ?? 'Generation failed', type: 'server_error' },
+        },
+        500,
+      );
+    }
+    const responseText = result.text || 'Hmm, I had trouble with that. Can you try again?';
     const elapsed = ((performance.now() - t_start) / 1000).toFixed(2);
-    console.log(`[agent] response (generate) | elapsed=${elapsed}s | chars=${result.text.length} | text=${JSON.stringify(result.text)}`);
+    console.log(`[agent] response (generate) | elapsed=${elapsed}s | chars=${responseText.length} | text=${JSON.stringify(responseText)}`);
 
     const responseId = `chatcmpl-${Date.now().toString(36)}`;
     const created = Math.floor(Date.now() / 1000);
@@ -191,15 +228,15 @@ const chatCompletionsRoute = registerApiRoute('/v1/chat/completions', {
           index: 0,
           message: {
             role: 'assistant',
-            content: result.text,
+            content: responseText,
           },
           finish_reason: 'stop',
         },
       ],
       usage: {
-        prompt_tokens: result.usage?.inputTokens ?? 0,
-        completion_tokens: result.usage?.outputTokens ?? 0,
-        total_tokens: result.usage?.totalTokens ?? 0,
+        prompt_tokens: result?.usage?.inputTokens ?? 0,
+        completion_tokens: result?.usage?.outputTokens ?? 0,
+        total_tokens: result?.usage?.totalTokens ?? 0,
       },
     });
   },

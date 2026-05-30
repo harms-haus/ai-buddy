@@ -244,16 +244,17 @@ curl -X POST http://localhost:4111/v1/chat/completions \
 
 **Tool key:** `control-volume`
 
-Controls the volume of the satellite speaker directly. Uses the `unit_entity_id` entity from `ha-entities.json` for volume operations. Only available when a `media_player` entity with a `unit_entity_id` is configured for the agent.
+Controls the volume of the satellite speaker directly. Supports absolute volume setting (0–10 scale), relative volume adjustments (increase/decrease by steps), and mute/unmute. Uses the `unit_entity_id` entity from `ha-entities.json` for volume operations. Only available when a `media_player` entity with a `unit_entity_id` is configured for the agent.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `increase` | one of three | Steps to turn up volume (0–10, each step adds ~10%) |
-| `decrease` | one of three | Steps to turn down volume (0–10, each step removes ~10%) |
-| `mute` | one of three | `true` to mute, `false` to unmute |
+| `increase` | one of four | Steps to turn up volume (0–10, each step adds ~10%) |
+| `decrease` | one of four | Steps to turn down volume (0–10, each step removes ~10%) |
+| `set_volume` | one of four | Set volume to a specific level (0–10, where 0 is silent and 10 is max). Maps directly: 5 = 50%, 8 = 80%. |
+| `mute` | one of four | `true` to mute, `false` to unmute |
 | `nickname` | no | Speaker nickname from `ha-entities.json`; defaults to first configured speaker |
 
-> **Note:** Exactly one of `increase`, `decrease`, or `mute` must be provided per call.
+> **Note:** Exactly one of `increase`, `decrease`, `mute`, or `set_volume` must be provided per call.
 
 ### Examples
 
@@ -287,6 +288,17 @@ curl -X POST http://localhost:4111/v1/chat/completions \
   -d '{
     "model": "zoe-agent",
     "messages": [{"role": "user", "content": "mute my speaker"}]
+  }'
+```
+
+**Set volume to a specific level:**
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "zoe-agent",
+    "messages": [{"role": "user", "content": "set the volume to 8"}]
   }'
 ```
 

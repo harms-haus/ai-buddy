@@ -20,11 +20,21 @@ function buildVolumeToolDescription(agentId: string): string {
   }
 
   const displayName = agentConfig.displayName;
-  return [
+  const volumeNicknames = Object.entries(agentConfig.entities)
+    .filter(([, e]) => e.type === "media_player" && e.unit_entity_id)
+    .map(([key]) => key);
+
+  const lines = [
     `Control the speaker volume in ${displayName}'s room! ${displayName} can:`,
-    "Make the music louder or quieter, or mute/unmute the speaker.",
-    `Just say something like "turn it up" or "make it quieter" or "mute the speaker".`,
-  ].join("\n");
+    "Set the volume to a specific level (0–10, where 0 is silent and 10 is max).",
+    "Make the music louder or quieter by a number of steps (1–10).",
+    "Mute or unmute the speaker.",
+  ];
+  if (volumeNicknames.length > 1) {
+    lines.push(`Available speakers: ${volumeNicknames.map(n => `"${n}"`).join(', ')}`);
+  }
+  lines.push(`Just say something like "set it to 5" or "turn it up" or "make it quieter".`);
+  return lines.join('\n');
 }
 
 function resolveVolumeEntity(
@@ -65,6 +75,7 @@ export function createHaVolumeTool(agentId: string) {
           .number()
           .min(0)
           .max(10)
+          .int()
           .optional()
           .describe(
             "How much to turn up the volume, from 0 to 10. Each step adds about 10% volume."
@@ -73,9 +84,19 @@ export function createHaVolumeTool(agentId: string) {
           .number()
           .min(0)
           .max(10)
+          .int()
           .optional()
           .describe(
             "How much to turn down the volume, from 0 to 10. Each step removes about 10% volume."
+          ),
+        set_volume: z
+          .number()
+          .min(0)
+          .max(10)
+          .int()
+          .optional()
+          .describe(
+            "Set the volume to a specific level, from 0 to 10. 0 is silent, 10 is maximum volume. Use this when the user wants a specific volume number like 'set volume to 8' or 'turn it to 3'."
           ),
         mute: z
           .boolean()
@@ -92,12 +113,12 @@ export function createHaVolumeTool(agentId: string) {
       })
       .refine(
         (data) => {
-          const count = [data.increase, data.decrease, data.mute].filter(
+          const count = [data.increase, data.decrease, data.mute, data.set_volume].filter(
             (v) => v !== undefined
           ).length;
           return count === 1;
         },
-        { message: "Exactly one of increase, decrease, or mute must be provided" }
+        { message: "Exactly one of increase, decrease, mute, or set_volume must be provided" }
       ),
     outputSchema: z.object({
       report: z.string().describe("Kid-friendly confirmation or error message"),
@@ -142,6 +163,31 @@ export function createHaVolumeTool(agentId: string) {
           };
         }
 
+        // 4.5. Set absolute volume
+        if (inputData.set_volume !== undefined) {
+          const newPct = inputData.set_volume * 10; // 0-10 → 0-100%
+          await callService(
+            connection,
+            "media_player",
+            "volume_set",
+            { volume_level: newPct / 100 },
+            { entity_id: resolved.unitEntityId }
+          );
+          if (inputData.set_volume === 0) {
+            return {
+              report: `Done! I turned the speaker all the way off in ${displayName}'s room.`,
+            };
+          }
+          if (inputData.set_volume === 10) {
+            return {
+              report: `Done! I turned the speaker all the way up in ${displayName}'s room!`,
+            };
+          }
+          return {
+            report: `Done! I set the speaker in ${displayName}'s room to volume ${inputData.set_volume}.`,
+          };
+        }
+
         // 5. Increase / decrease
         const states = await getStates(connection);
         const entityState = states.find(
@@ -175,12 +221,12 @@ export function createHaVolumeTool(agentId: string) {
         }
         if (inputData.increase !== undefined) {
           return {
-            report: `Done! I turned up the speaker in ${displayName}'s room. It's now at ${newPct}%.`,
+            report: `Done! I turned up the speaker in ${displayName}'s room.`,
           };
         }
         // decrease
         return {
-          report: `Done! I turned down the speaker in ${displayName}'s room. It's now at ${newPct}%.`,
+          report: `Done! I turned down the speaker in ${displayName}'s room.`,
         };
       } catch {
         return {
