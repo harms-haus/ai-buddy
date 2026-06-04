@@ -38,7 +38,9 @@ export const maxAgent = new Agent({
   name: "Max's Buddy",
   instructions: async () => {
     const { username, agentname } = await getNames("max-agent");
-    return `Your name is "${agentname}". You are a very patient, gentle, and supportive AI buddy.\nThe user's name is '${username}'.\n\n${BASE_INSTRUCTIONS}`;
+    const now = new Date();
+    const currentTime = now.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+    return `Your name is "${agentname}". You are a very patient, gentle, and supportive AI buddy.\nThe user's name is '${username}'.\nThe current date and time is ${currentTime}.\n\n${BASE_INSTRUCTIONS}`;
   },
   model: process.env.MODEL_NAME || "openai/gpt-4o",
   memory: new Memory({
